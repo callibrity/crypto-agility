@@ -13,7 +13,7 @@ Real formats add optional extras on top: multiple wrapped DEKs (multi-recipient,
 
 | | How the DEK is wrapped | Where the KEK lives | Serialized as | Algorithm named by | Notable extras |
 |---|---|---|---|---|---|
-| **Homegrown** (the demo) | RSA-OAEP or ML-KEM, pluggable | in-process (demo only) | ad-hoc JSON | an `alg` field | none, it exists to show the skeleton |
+| **Homegrown** (the demo) | RSA-OAEP, ML-KEM or a hybrid, pluggable | key files on disk (demo only) | ad-hoc text file | an `alg` field | none, it exists to show the skeleton |
 | **Google Tink** | KMS-wrapped DEK (envelope AEAD) | your cloud KMS / HSM | Tink keyset + key-ID-prefixed ciphertext | keyset key type + key ID prefix | key rotation, associated data, cross-language, hard-to-misuse API |
 | **AWS Encryption SDK** | one or more KMS keys (keyrings) | AWS KMS (HSM) | a documented binary message format | an algorithm suite ID in the header | multiple data keys (multi-region), encryption context, key commitment, ECDSA signature, framing |
 | **JWE** (RFC 7516) | `alg` (RSA-OAEP, ECDH-ES+A256KW, …) | your choice (JWK, KMS) | compact `hdr.key.iv.ct.tag`, or JSON | `alg` + `enc` in the JOSE header | web/token-native; JSON form allows multiple recipients; mind the JOSE foot-guns |
@@ -23,7 +23,7 @@ Real formats add optional extras on top: multiple wrapped DEKs (multi-recipient,
 
 Different bytes, one skeleton, and every one of them writes the algorithm into the envelope. That is not decoration. It is the single thing that lets you change algorithms without a flag day.
 
-So the guidance: don't hand-roll, and don't hardcode. For most shops that means a KMS plus Tink or the AWS Encryption SDK. Reach for JWE when the envelope is a token crossing a boundary, and CMS when a standard makes you. The homegrown JSON in the demo is only there to show the skeleton with nothing hiding it.
+So the guidance: don't hand-roll, and don't hardcode. For most shops that means a KMS plus Tink or the AWS Encryption SDK. Reach for JWE when the envelope is a token crossing a boundary, and CMS when a standard makes you. The homegrown format in the demo is only there to show the skeleton with nothing hiding it.
 
 ---
 

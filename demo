@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+# Builds if needed, then runs one of the demos. Run ./demo with no arguments for the list.
+# Needs JDK 25+. There are no runtime dependencies, so the classes run with plain java.
+set -euo pipefail
+cd "$(dirname "$0")"
+./mvnw -q compile
+exec java -cp target/classes com.callibrity.cryptoagility.demos.Demo "$@"

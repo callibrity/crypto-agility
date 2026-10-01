@@ -3,9 +3,9 @@
 Demo code for the talk **"Crypto you can change: getting ready for post-quantum
 without a rewrite"** (James Carman, Momentum Dev Conference, Oct 15 2026).
 
-It shows crypto agility through envelope encryption in one dependency-free Java
-file: data written under RSA and data written under ML-KEM sit side by side, and
-both decrypt, with no migration window and no change to the calling code.
+It shows crypto agility through envelope encryption, in plain Java with no
+runtime dependencies. Data written under RSA, under ML-KEM and under a hybrid of
+the two sits side by side, all of it decrypts, and the calling code never changes.
 
 ## The point
 
@@ -21,23 +21,14 @@ Envelope encryption gives you both. The data is always AES-256-GCM, which quantu
 computers do not threaten. The only algorithm-dependent step is how the data key
 is wrapped, and that step lives behind a single interface.
 
-## Run it
+## Quick start
 
-Requires **JDK 24 or later**. ML-KEM is built into the platform (JEP 496), so
-there is nothing to install or build.
+You need **JDK 25 or later**. Maven is not required; the wrapper script fetches
+it the first time.
 
 ```sh
-./run.sh
-# or
-java EnvelopeDemo.java
+./demo swap
 ```
-
-On JDK 21-23 the `javax.crypto.KEM` API is present but ML-KEM is not; add
-BouncyCastle 1.86 and register it as a provider.
-
-### Expected output
-
-The ciphertext prefixes differ on every run; everything else is stable.
 
 ```
 config: crypto.wrap = RSA-OAEP-3072
@@ -54,24 +45,53 @@ Decrypt both, no migration window:
 Old data still reads, new data is post-quantum, the code never changed.
 ```
 
-## What to look at
+## Things to run
 
-### 1. The seam
+| Command | What it shows |
+|---|---|
+| `./demo swap` | The demo from the talk, in memory: RSA, then ML-KEM, and both decrypt |
+| `./demo write "some text"` | Encrypts under the algorithm named in `config/crypto.properties` and saves the envelope under `data/` |
+| `./demo read` | Decrypts everything under `data/`, whichever algorithm wrapped it |
+| `./demo rewrap` | Moves every stored envelope to the configured algorithm by re-wrapping only its data key |
+| `./demo pitfalls` | Two ways an algorithm change goes wrong |
+| `./mvnw test` | The same claims as tests |
+
+`write`, `read` and `rewrap` work together across runs. Write a few records,
+change the one line in `config/crypto.properties`, write a few more, and read
+them all back. [docs/exploring.md](docs/exploring.md) walks through that and
+more, including adding an algorithm of your own.
+
+On Windows, or to skip the script:
+
+```
+mvnw compile
+java -cp target/classes com.callibrity.cryptoagility.demos.Demo swap
+```
+
+## Where to look
+
+Everything is under `src/main/java/com/callibrity/cryptoagility/`.
+
+| Package | What is there |
+|---|---|
+| `envelope` | The seam (`KeyWrapper`), the `Envelope`, and `EnvelopeCrypto` with `encrypt`, `decrypt` and `rewrap` |
+| `wrappers` | `RsaWrapper`, `MlKemWrapper` and `HybridWrapper`: the only code that knows an algorithm |
+| `store` | Envelopes and demo keys kept as small text files under `data/` |
+| `demos` | One short class per command, and the registry of readable algorithms in `Workspace` |
+
+### The seam
 
 Swap the implementation, never the call sites.
 
 ```java
-interface KeyWrapper {
+public interface KeyWrapper {
     String algId();
     WrappedDek wrap(SecretKey dek) throws GeneralSecurityException;
     SecretKey unwrap(WrappedDek w) throws GeneralSecurityException;
 }
 ```
 
-`RsaWrapper` and `MlKemWrapper` both implement it. Adding another algorithm later
-(HQC, say) means writing one more class. Nothing else moves.
-
-### 2. The one algorithm-dependent line
+### The one algorithm-dependent line
 
 ```java
 byte[] ct = c.doFinal(plaintext);      // data is ALWAYS AES-256-GCM
@@ -81,32 +101,21 @@ return new Envelope(wrapper.algId(), nonce, ct, w.wrappedKey(), w.kemCt(), w.wra
 
 The envelope records `wrapper.algId()`, so each blob names its own algorithm.
 
-### 3. The swap
-
-```java
-var rsa = new RsaWrapper();
-Envelope v1 = encrypt(..., rsa);       // alg = RSA-OAEP-3072
-
-var mlkem = new MlKemWrapper();
-Envelope v2 = encrypt(..., mlkem);     // alg = ML-KEM-768
-
-decrypt(v1, registry);                 // still reads: the envelope says RSA
-decrypt(v2, registry);                 // post-quantum: the envelope says ML-KEM
-```
-
 ## This is a teaching demo
 
-The keys live in process memory and the envelope format is homegrown, so that
-nothing hides the skeleton. Do not hand-roll this in production. Use a KMS with
-Tink or the AWS Encryption SDK, JWE when the envelope is a token crossing a
-boundary, or CMS when a standard requires it. See
+The envelope format is homegrown and the private keys sit unencrypted in
+`data/keys/`, so that nothing hides the skeleton. `HybridWrapper` shows the shape
+of a hybrid but is not a reviewed construction. Do not hand-roll any of this in
+production. Use a KMS with Tink or the AWS Encryption SDK, JWE when the envelope
+is a token crossing a boundary, or CMS when a standard requires it. See
 [docs/envelope-shapes.md](docs/envelope-shapes.md).
 
 ## Further reading
 
-[docs/envelope-shapes.md](docs/envelope-shapes.md) covers the general shape of
-envelope encryption, how Tink, the AWS Encryption SDK, JWE and CMS implement it,
-and where post-quantum support stood as of 30 Sept 2026.
+- [docs/exploring.md](docs/exploring.md): guided experiments with this code.
+- [docs/envelope-shapes.md](docs/envelope-shapes.md): the general shape of
+  envelope encryption, how Tink, the AWS Encryption SDK, JWE and CMS implement
+  it, and where post-quantum support stood as of 30 Sept 2026.
 
 ## License
 

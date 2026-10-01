@@ -1,1 +1,11 @@
+target/
+data/
 *.class
+
+# IDE files
+.idea/
+*.iml
+out/
+.classpath
+.project
+.settings/
