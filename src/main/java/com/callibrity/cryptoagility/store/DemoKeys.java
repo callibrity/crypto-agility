@@ -10,6 +10,7 @@ import java.security.spec.PKCS8EncodedKeySpec;
 import java.security.spec.X509EncodedKeySpec;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.function.Supplier;
 
 /**
  * Key pairs kept in plain files so that envelopes written by one run can be
@@ -49,5 +50,27 @@ public final class DemoKeys {
         fields.put("private", KeyValueFile.encode(kp.getPrivate().getEncoded()));
         KeyValueFile.write(file, fields);
         return kp;
+    }
+
+    /**
+     * Loads a key kept as plain named fields, generating and saving it first if
+     * it does not exist yet. For keys the JDK has no encoding for.
+     */
+    public Map<String, String> fields(String fileName, Supplier<Map<String, String>> generator) throws IOException {
+        Path file = dir.resolve(fileName);
+        if (!Files.exists(file)) {
+            KeyValueFile.write(file, generator.get());
+        }
+        return KeyValueFile.read(file);
+    }
+
+    /** Reads a file of named fields that must already exist. */
+    public Map<String, String> read(String fileName) throws IOException {
+        return KeyValueFile.read(dir.resolve(fileName));
+    }
+
+    /** Writes a file of named fields, replacing what was there. */
+    public void write(String fileName, Map<String, String> fields) throws IOException {
+        KeyValueFile.write(dir.resolve(fileName), fields);
     }
 }

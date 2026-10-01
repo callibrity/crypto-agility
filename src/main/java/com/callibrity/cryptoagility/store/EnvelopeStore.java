@@ -81,7 +81,8 @@ public final class EnvelopeStore {
         }
     }
 
-    private static Envelope load(Path file) throws IOException {
+    /** Reads one envelope file, wherever it is. A copied envelope is as good as the original. */
+    public static Envelope load(Path file) throws IOException {
         Map<String, String> fields = KeyValueFile.read(file);
         return new Envelope(
                 fields.get("alg"),

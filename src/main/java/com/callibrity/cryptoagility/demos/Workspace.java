@@ -8,6 +8,7 @@ import com.callibrity.cryptoagility.store.EnvelopeStore;
 import com.callibrity.cryptoagility.wrappers.HybridWrapper;
 import com.callibrity.cryptoagility.wrappers.MlKemWrapper;
 import com.callibrity.cryptoagility.wrappers.RsaWrapper;
+import com.callibrity.cryptoagility.wrappers.ToyRsaWrapper;
 
 import java.io.IOException;
 import java.io.Reader;
@@ -25,15 +26,22 @@ record Workspace(KeyWrapper current, WrapperRegistry registry, EnvelopeStore env
     static final String CONFIG_KEY = "crypto.wrap";
     private static final Path CONFIG_FILE = Path.of("config", "crypto.properties");
     private static final Path DATA_DIR = Path.of("data");
+    private static final Path KEYS_DIR = DATA_DIR.resolve("keys");
+    private static final String TOY_RSA_PUBLIC_KEY = "rsa-toy.pub";
 
     static Workspace open() throws GeneralSecurityException, IOException {
-        WrapperRegistry registry = registry(new DemoKeys(DATA_DIR.resolve("keys")));
+        WrapperRegistry registry = registry(new DemoKeys(KEYS_DIR));
         String configured = configuredAlgorithm();
         if (configured == null) {
             throw new UnknownAlgorithmException(
                     CONFIG_KEY + " is not set in " + CONFIG_FILE + " (registered: " + registry.algIds() + ")");
         }
-        return new Workspace(registry.get(configured), registry, new EnvelopeStore(DATA_DIR.resolve("envelopes")));
+        return new Workspace(registry.get(configured), registry, envelopeStore());
+    }
+
+    /** The stored envelopes on their own. Looking at them needs no keys and no configuration. */
+    static EnvelopeStore envelopeStore() {
+        return new EnvelopeStore(DATA_DIR.resolve("envelopes"));
     }
 
     /**
@@ -47,7 +55,20 @@ record Workspace(KeyWrapper current, WrapperRegistry registry, EnvelopeStore env
                 .register(new MlKemWrapper(keys.keyPair("ml-kem-768", MlKemWrapper::newKeyPair)))
                 .register(new HybridWrapper(
                         keys.keyPair("hybrid-x25519", HybridWrapper::newX25519KeyPair),
-                        keys.keyPair("hybrid-ml-kem-768", MlKemWrapper::newKeyPair)));
+                        keys.keyPair("hybrid-ml-kem-768", MlKemWrapper::newKeyPair)))
+                .register(toyRsa(keys));
+    }
+
+    // The toy key is published as a separate file, so ./demo crack can be seen to read only the public half.
+    private static ToyRsaWrapper toyRsa(DemoKeys keys) throws IOException {
+        var toyKeys = ToyRsaWrapper.Keys.fromFields(keys.fields("rsa-toy.key", () -> ToyRsaWrapper.newKeys().toFields()));
+        keys.write(TOY_RSA_PUBLIC_KEY, toyKeys.publicKey().toFields());
+        return new ToyRsaWrapper(toyKeys);
+    }
+
+    /** What an attacker has: the toy public key, and nothing else from data/keys. */
+    static ToyRsaWrapper.PublicKey toyRsaPublicKey() throws IOException {
+        return ToyRsaWrapper.PublicKey.fromFields(new DemoKeys(KEYS_DIR).read(TOY_RSA_PUBLIC_KEY));
     }
 
     // -Dcrypto.wrap=... on the command line wins over the properties file.

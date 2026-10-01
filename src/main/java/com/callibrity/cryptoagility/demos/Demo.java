@@ -15,7 +15,10 @@ public final class Demo {
               swap            the demo from the talk: RSA, then ML-KEM, both decrypt (in memory)
               write "text"    encrypt under the algorithm in config/crypto.properties, save to data/
               read            decrypt everything in data/, whatever wrapped it
+              list            one line per stored envelope: algorithm and sizes (alias: ls)
+              show [record]   draw a stored envelope, or all of them, field by field
               rewrap          move stored envelopes to the configured algorithm, data untouched
+              crack [record]  break a record wrapped with the toy RSA key, using only the public key
               pitfalls        two ways an algorithm change goes wrong
             """;
 
@@ -33,7 +36,10 @@ public final class Demo {
                     StoreCommands.write(String.join(" ", Arrays.copyOfRange(args, 1, args.length)));
                 }
                 case "read" -> StoreCommands.read();
+                case "list", "ls" -> StoreCommands.list();
+                case "show" -> StoreCommands.show(args.length < 2 ? null : args[1]);
                 case "rewrap" -> StoreCommands.rewrap();
+                case "crack" -> CrackCommand.run(args.length < 2 ? null : args[1]);
                 case "pitfalls" -> PitfallsDemo.run();
                 default -> {
                     System.err.print(USAGE);
@@ -45,7 +51,7 @@ public final class Demo {
         }
     }
 
-    private static void fail(String message) {
+    static void fail(String message) {
         System.err.println("error: " + message);
         System.exit(1);
     }

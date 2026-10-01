@@ -1,6 +1,6 @@
 # Exploring the demo
 
-Six experiments, each a few minutes. They build on each other, but any of them
+Seven experiments, each a few minutes. They build on each other, but any of them
 can be done on its own. Everything you create lives under `data/`, which git
 ignores. Delete that directory whenever you want a clean start.
 
@@ -54,9 +54,22 @@ config: crypto.wrap = ML-KEM-768
 Algorithms in use: {ML-KEM-768=1, RSA-OAEP-3072=2}
 ```
 
-No code changed and nothing was migrated. Open one of the files in
-`data/envelopes/` in a text editor: the first line is the algorithm, stored next
-to the data it protects. That line is why the old records still read.
+No code changed and nothing was migrated. To see why the old records still
+read, look at what is actually stored:
+
+```sh
+./demo list
+./demo show 1
+```
+
+`list` gives one line per envelope and `show` draws one field by field. Neither
+loads a key or decrypts anything, and both can still tell you the algorithm,
+because it is stored in the clear next to the data it protects. The files
+themselves are plain text under `data/envelopes/` if you want to open one.
+
+Run `./demo show` with no record to draw them all. The RSA envelope has one
+large wrapped key; the ML-KEM envelope has a small wrapped key plus a KEM
+ciphertext. The `data` section has the same shape in both.
 
 The last line of the output is an inventory. In a real system, being able to
 answer "which algorithms is our stored data still using?" is the first thing a
@@ -162,6 +175,75 @@ already had room for them.
 `HybridWrapper` is here to show the idea. It is not the X-Wing construction and
 has had no security review, so treat it as reading material rather than
 something to copy.
+
+## 7. Harvest now, decrypt later
+
+Nobody can break RSA-3072 on a laptop, so this experiment uses `RSA-TOY-96`: RSA
+with a 96-bit key, small enough to factor in a few seconds. It is a stand-in.
+The attack here is classical and only works because the key is tiny. What it
+shows is the consequence, which is the same one Shor's algorithm on a large
+quantum computer would have for real RSA.
+
+Set `crypto.wrap=RSA-TOY-96` and write a secret:
+
+```sh
+./demo write "the merger closes on Friday"
+./demo list
+```
+
+Note the id of the new record; the commands below assume `record-0001`. Now play
+the attacker and take a copy of the envelope. No keys, only the stored file:
+
+```sh
+cp data/envelopes/record-0001.envelope data/harvested.envelope
+```
+
+Time passes. The defenders do everything right: they set
+`crypto.wrap=ML-KEM-768` and re-wrap.
+
+```sh
+./demo rewrap
+./demo crack 1
+```
+
+```
+record-0001 (ML-KEM-768)
+  not attempted: this is not RSA, so there is no modulus to factor.
+```
+
+The stored record is safe now. The copy is not:
+
+```sh
+./demo crack data/harvested.envelope
+```
+
+```
+data/harvested.envelope (RSA-TOY-96)
+  public key: n = 45113622079573034424233906421 (96 bits), e = 65537
+  factoring n with Pollard's rho, using only the public key...
+  factored in 3.1 s: n = 187612018428161 x 240462324871261
+  data key unwrapped with the rebuilt private key
+  plaintext -> the merger closes on Friday
+```
+
+`crack` reads `data/keys/rsa-toy.pub` and the envelope, and nothing else. Read
+`CrackCommand.java` and `Factoring.java` to see all of it: factor the modulus,
+rebuild the private exponent, unwrap the data key, decrypt.
+
+Two things to take from this:
+
+- **Re-wrapping protects what you still hold, not what was already copied.** The
+  AES-256-GCM data in the harvested file was never attacked. It fell because the
+  key next to it was wrapped with something that later broke.
+- **The clock starts when the data is exposed, not when the algorithm breaks.**
+  Anything that has to stay secret for ten years needed a post-quantum wrap
+  before it was first stored or sent.
+
+To feel the difference key length makes, change `MODULUS_BITS` in
+`ToyRsaWrapper.java`. Each extra 8 bits makes the factoring roughly four times
+slower. The algorithm name follows the constant, so at 104 bits you would set
+`crypto.wrap=RSA-TOY-104`. Delete `data/keys/rsa-toy.key` afterwards so a new key
+is generated; records already wrapped with the old one will stop reading.
 
 ## Going further
 

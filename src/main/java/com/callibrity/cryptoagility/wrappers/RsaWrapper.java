@@ -12,6 +12,8 @@ import java.security.KeyPairGenerator;
 /** Classical, quantum-vulnerable: RSA-OAEP wraps the data key directly. */
 public final class RsaWrapper implements KeyWrapper {
 
+    public static final String ALG_ID = "RSA-OAEP-3072";
+
     private static final String TRANSFORMATION = "RSA/ECB/OAEPWithSHA-256AndMGF1Padding";
 
     private final KeyPair kp;
@@ -31,7 +33,7 @@ public final class RsaWrapper implements KeyWrapper {
     }
 
     @Override
-    public String algId() { return "RSA-OAEP-3072"; }
+    public String algId() { return ALG_ID; }
 
     @Override
     public WrappedDek wrap(SecretKey dek) throws GeneralSecurityException {

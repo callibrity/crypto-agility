@@ -52,7 +52,10 @@ Old data still reads, new data is post-quantum, the code never changed.
 | `./demo swap` | The demo from the talk, in memory: RSA, then ML-KEM, and both decrypt |
 | `./demo write "some text"` | Encrypts under the algorithm named in `config/crypto.properties` and saves the envelope under `data/` |
 | `./demo read` | Decrypts everything under `data/`, whichever algorithm wrapped it |
+| `./demo list` | One line per stored envelope, with its algorithm and sizes (`ls` works too) |
+| `./demo show [record]` | Draws a stored envelope field by field, or all of them. Nothing is decrypted |
 | `./demo rewrap` | Moves every stored envelope to the configured algorithm by re-wrapping only its data key |
+| `./demo crack [record]` | Breaks a record wrapped with the deliberately tiny `RSA-TOY-96` key, using only the public key |
 | `./demo pitfalls` | Two ways an algorithm change goes wrong |
 | `./mvnw test` | The same claims as tests |
 
@@ -75,7 +78,7 @@ Everything is under `src/main/java/com/callibrity/cryptoagility/`.
 | Package | What is there |
 |---|---|
 | `envelope` | The seam (`KeyWrapper`), the `Envelope`, and `EnvelopeCrypto` with `encrypt`, `decrypt` and `rewrap` |
-| `wrappers` | `RsaWrapper`, `MlKemWrapper` and `HybridWrapper`: the only code that knows an algorithm |
+| `wrappers` | `RsaWrapper`, `MlKemWrapper`, `HybridWrapper` and the breakable `ToyRsaWrapper`: the only code that knows an algorithm |
 | `store` | Envelopes and demo keys kept as small text files under `data/` |
 | `demos` | One short class per command, and the registry of readable algorithms in `Workspace` |
 
@@ -105,7 +108,8 @@ The envelope records `wrapper.algId()`, so each blob names its own algorithm.
 
 The envelope format is homegrown and the private keys sit unencrypted in
 `data/keys/`, so that nothing hides the skeleton. `HybridWrapper` shows the shape
-of a hybrid but is not a reviewed construction. Do not hand-roll any of this in
+of a hybrid but is not a reviewed construction, and `ToyRsaWrapper` is broken on
+purpose. Do not hand-roll any of this in
 production. Use a KMS with Tink or the AWS Encryption SDK, JWE when the envelope
 is a token crossing a boundary, or CMS when a standard requires it. See
 [docs/envelope-shapes.md](docs/envelope-shapes.md).
