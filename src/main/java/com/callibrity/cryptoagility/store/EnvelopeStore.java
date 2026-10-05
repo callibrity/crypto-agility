@@ -1,6 +1,7 @@
 package com.callibrity.cryptoagility.store;
 
 import com.callibrity.cryptoagility.envelope.Envelope;
+import com.callibrity.cryptoagility.envelope.WrappedDek;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -9,15 +10,22 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.stream.Stream;
 
 /**
  * Envelopes on disk, one small text file each. Open one: the first line is the
- * algorithm that wrapped it, stored right next to the data it protects.
+ * algorithm that wrapped it, stored right next to the data it protects. After
+ * the nonce and ciphertext come the fields of the wrapped key, which differ
+ * from one algorithm to the next.
  */
 public final class EnvelopeStore {
 
     private static final String SUFFIX = ".envelope";
+    private static final String ALG = "alg";
+    private static final String NONCE = "nonce";
+    private static final String CIPHERTEXT = "ciphertext";
+    private static final Set<String> RESERVED = Set.of(ALG, NONCE, CIPHERTEXT);
 
     /** An envelope together with the id it is stored under. */
     public record Stored(String id, Envelope envelope) {}
@@ -42,16 +50,16 @@ public final class EnvelopeStore {
     /** Writes an envelope under an existing id, replacing what was there. */
     public void put(String id, Envelope envelope) throws IOException {
         Map<String, String> fields = new LinkedHashMap<>();
-        fields.put("alg", envelope.alg());
-        fields.put("nonce", KeyValueFile.encode(envelope.nonce()));
-        fields.put("ciphertext", KeyValueFile.encode(envelope.ciphertext()));
-        fields.put("wrappedKey", KeyValueFile.encode(envelope.wrappedKey()));
-        if (envelope.kemCt() != null) {
-            fields.put("kemCt", KeyValueFile.encode(envelope.kemCt()));
-        }
-        if (envelope.wrapNonce() != null) {
-            fields.put("wrapNonce", KeyValueFile.encode(envelope.wrapNonce()));
-        }
+        fields.put(ALG, envelope.alg());
+        fields.put(NONCE, KeyValueFile.encode(envelope.nonce()));
+        fields.put(CIPHERTEXT, KeyValueFile.encode(envelope.ciphertext()));
+        // Whatever the wrapper produced is stored as it comes. The store never needs to know the names.
+        envelope.wrappedDek().fields().forEach((name, value) -> {
+            if (RESERVED.contains(name)) {
+                throw new IllegalArgumentException("a wrapped key cannot have a field called " + name);
+            }
+            fields.put(name, KeyValueFile.encode(value));
+        });
         KeyValueFile.write(dir.resolve(id + SUFFIX), fields);
     }
 
@@ -84,16 +92,16 @@ public final class EnvelopeStore {
     /** Reads one envelope file, wherever it is. A copied envelope is as good as the original. */
     public static Envelope load(Path file) throws IOException {
         Map<String, String> fields = KeyValueFile.read(file);
+        Map<String, byte[]> wrapFields = new LinkedHashMap<>();
+        for (Map.Entry<String, String> field : fields.entrySet()) {
+            if (!RESERVED.contains(field.getKey())) {
+                wrapFields.put(field.getKey(), KeyValueFile.decode(file, field.getKey(), field.getValue()));
+            }
+        }
         return new Envelope(
-                fields.get("alg"),
-                KeyValueFile.decode(file, "nonce", fields.get("nonce")),
-                KeyValueFile.decode(file, "ciphertext", fields.get("ciphertext")),
-                KeyValueFile.decode(file, "wrappedKey", fields.get("wrappedKey")),
-                optional(file, "kemCt", fields),
-                optional(file, "wrapNonce", fields));
-    }
-
-    private static byte[] optional(Path file, String field, Map<String, String> fields) throws IOException {
-        return fields.containsKey(field) ? KeyValueFile.decode(file, field, fields.get(field)) : null;
+                fields.get(ALG),
+                KeyValueFile.decode(file, NONCE, fields.get(NONCE)),
+                KeyValueFile.decode(file, CIPHERTEXT, fields.get(CIPHERTEXT)),
+                new WrappedDek(wrapFields));
     }
 }

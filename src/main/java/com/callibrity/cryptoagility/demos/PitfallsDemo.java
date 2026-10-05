@@ -35,8 +35,7 @@ final class PitfallsDemo {
         System.out.println("Pitfall 1: an envelope that doesn't say how it was wrapped\n");
 
         Envelope full = encrypt("customer record #1 (written last year)".getBytes(UTF_8), rsa);
-        Envelope anonymous = new Envelope(null, full.nonce(), full.ciphertext(),
-                full.wrappedKey(), full.kemCt(), full.wrapNonce());
+        Envelope anonymous = new Envelope(null, full.nonce(), full.ciphertext(), full.wrappedDek());
         System.out.println("  Last year: wrapped with " + rsa.algId() + ", stored with no algorithm name.");
         System.out.println("  Today:     crypto.wrap = " + mlkem.algId() + ", so the reader assumes " + mlkem.algId() + ".");
         System.out.println("    -> " + open(anonymous, mlkem));
@@ -81,8 +80,7 @@ final class PitfallsDemo {
 
     // Opens an envelope by assuming an algorithm instead of reading it from the envelope.
     private static String open(Envelope env, KeyWrapper assumed) {
-        Envelope labelled = new Envelope(assumed.algId(), env.nonce(), env.ciphertext(),
-                env.wrappedKey(), env.kemCt(), env.wrapNonce());
+        Envelope labelled = new Envelope(assumed.algId(), env.nonce(), env.ciphertext(), env.wrappedDek());
         return open(labelled, new WrapperRegistry().register(assumed));
     }
 }

@@ -1,5 +1,7 @@
 package com.callibrity.cryptoagility.wrappers;
 
+import com.callibrity.cryptoagility.envelope.AlgorithmFacts;
+import com.callibrity.cryptoagility.envelope.Inventoried;
 import com.callibrity.cryptoagility.envelope.KeyWrapper;
 import com.callibrity.cryptoagility.envelope.WrappedDek;
 
@@ -26,7 +28,7 @@ import java.util.Map;
  * because the JDK rightly refuses to make RSA keys this small. Never use any of
  * this for real data.
  */
-public final class ToyRsaWrapper implements KeyWrapper {
+public final class ToyRsaWrapper implements KeyWrapper, Inventoried {
 
     /** Sets how long the crack takes: about 0.2 s at 80 bits, a few seconds at 96, around 15 s at 104. */
     public static final int MODULUS_BITS = 96;
@@ -34,6 +36,7 @@ public final class ToyRsaWrapper implements KeyWrapper {
 
     private static final BigInteger PUBLIC_EXPONENT = BigInteger.valueOf(65537);
     private static final int DEK_BYTES = 32;
+    private static final String WRAPPED_KEY = "wrappedKey";
 
     /** The half anyone may see. Knowing the factors of the modulus is as good as knowing the private key. */
     public record PublicKey(BigInteger modulus, BigInteger exponent) {
@@ -108,20 +111,21 @@ public final class ToyRsaWrapper implements KeyWrapper {
             BigInteger m = new BigInteger(1, Arrays.copyOfRange(plain, from, to));
             out.writeBytes(fixedWidth(m.modPow(keys.publicKey().exponent(), n), blockBytes(n)));
         }
-        return new WrappedDek(out.toByteArray(), null, null);
+        return WrappedDek.of(WRAPPED_KEY, out.toByteArray());
     }
 
     @Override
     public SecretKey unwrap(WrappedDek w) throws InvalidKeyException {
         BigInteger n = keys.publicKey().modulus();
+        byte[] wrapped = w.require(WRAPPED_KEY, ALG_ID);
         int blocks = Math.ceilDiv(DEK_BYTES, chunkBytes(n));
-        if (w.wrappedKey().length != blocks * blockBytes(n)) {
+        if (wrapped.length != blocks * blockBytes(n)) {
             throw new InvalidKeyException("wrapped key is the wrong size to have been wrapped with " + ALG_ID);
         }
         var out = new ByteArrayOutputStream();
         for (int block = 0; block < blocks; block++) {
             int from = block * blockBytes(n);
-            BigInteger c = new BigInteger(1, Arrays.copyOfRange(w.wrappedKey(), from, from + blockBytes(n)));
+            BigInteger c = new BigInteger(1, Arrays.copyOfRange(wrapped, from, from + blockBytes(n)));
             int chunk = Math.min(chunkBytes(n), DEK_BYTES - out.size());
             out.writeBytes(fixedWidth(c.modPow(keys.privateExponent(), n), chunk));
         }
@@ -144,5 +148,18 @@ public final class ToyRsaWrapper implements KeyWrapper {
         int copy = Math.min(raw.length, length);
         System.arraycopy(raw, raw.length - copy, out, length - copy, copy);
         return out;
+    }
+
+    // No security at all, by design.
+    @Override
+    public AlgorithmFacts facts() {
+        return AlgorithmFacts.of("pke", 0, 0, "keygen", "encrypt", "decrypt")
+                .withParameterSet(String.valueOf(MODULUS_BITS)).withPadding("raw");
+    }
+
+    // No JCA provider: the arithmetic is written out by hand above.
+    @Override
+    public String provider() {
+        return "none";
     }
 }

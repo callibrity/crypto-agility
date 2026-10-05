@@ -2,70 +2,110 @@ package com.callibrity.cryptoagility.demos;
 
 import com.callibrity.cryptoagility.envelope.Envelope;
 
-import java.util.ArrayList;
 import java.util.Base64;
-import java.util.List;
-import java.util.stream.Stream;
+import java.util.Map;
+import java.util.function.UnaryOperator;
 
 /**
- * Draws an envelope as a box in the terminal. It only looks at what is stored;
- * nothing is decrypted, and no key is needed to see which algorithm was used.
+ * Draws an envelope in the terminal: the algorithm name on the outside, then
+ * the wrapped data key, then the data that key opens. The bars compare field
+ * sizes. It only looks at what is stored; nothing is decrypted, and no key is
+ * needed to see which algorithm was used.
  */
 final class EnvelopeView {
 
     private static final int GCM_TAG_BYTES = 16;
-    private static final String KEY_TITLE = "wrapped data key (the algorithm-dependent part)";
-    private static final String DATA_TITLE = "data (always AES-256-GCM)";
+    private static final int BYTES_PER_BLOCK = 64;
+    private static final int BAR_WIDTH = 26;
+    private static final int PREVIEW_WIDTH = 9;
+    private static final String PARTIAL_BLOCKS = " ▏▎▍▌▋▊▉";
+    private static final String ALG_NOTE = "in the clear, no key needed";
+    private static final String ARROW = "▼ yields the AES-256 data key";
 
     private EnvelopeView() {}
 
     static String render(String id, Envelope env) {
-        List<String> key = new ArrayList<>();
-        if (env.kemCt() != null) {
-            key.add(row("kemCt", env.kemCt(), "KEM ciphertext, recovers the wrapping key"));
-        }
-        if (env.wrapNonce() != null) {
-            key.add(row("wrapNonce", env.wrapNonce(), "nonce for the key wrap"));
-        }
-        key.add(row("wrappedKey", env.wrappedKey(), "the AES-256 data key, encrypted"));
+        Map<String, byte[]> wrap = env.wrappedDek().fields();
+        String alg = env.alg() == null ? "(none)" : env.alg();
 
-        List<String> data = List.of(
-                row("nonce", env.nonce(), "nonce for the data"),
-                row("ciphertext", env.ciphertext(),
-                        (env.ciphertext().length - GCM_TAG_BYTES) + " bytes of data + " + GCM_TAG_BYTES + "-byte tag"));
+        int nameWidth = wrap.keySet().stream().mapToInt(String::length).max().orElse(0);
+        nameWidth = Math.max(nameWidth, "ciphertext".length() + 2);
+        int rowWidth = nameWidth + 1 + "00000 bytes".length() + 2 + BAR_WIDTH + 2 + PREVIEW_WIDTH;
+        int boxWidth = rowWidth + 6;                             // an inner box: border, two spaces, row, two spaces, border
+        int width = boxWidth + 4;                                // the envelope: border, space, inner box, space, border
 
-        String alg = String.format("%-11s %-22s %s", "alg", env.alg() == null ? "(none)" : env.alg(),
-                "in the clear, says how to open the key");
-
-        // Wide enough for the longest row, and for each title plus a little rule after it.
-        int width = Stream.concat(
-                        Stream.concat(Stream.of(alg), Stream.concat(key.stream(), data.stream())).map(String::length),
-                        Stream.of(id, KEY_TITLE, DATA_TITLE).map(title -> title.length() + 2))
-                .mapToInt(Integer::intValue).max().orElseThrow();
+        int stored = env.nonce().length + env.ciphertext().length
+                + wrap.values().stream().mapToInt(value -> value.length).sum();
+        String total = stored + " bytes";
 
         var out = new StringBuilder();
-        out.append(rule('┌', id, '┐', width));
-        out.append(content(alg, width));
-        out.append(rule('├', KEY_TITLE, '┤', width));
-        key.forEach(line -> out.append(content(line, width)));
-        out.append(rule('├', DATA_TITLE, '┤', width));
-        data.forEach(line -> out.append(content(line, width)));
-        out.append(rule('└', "", '┘', width));
+        out.append(Paint.bold(id)).append(" ".repeat(width - id.length() - total.length())).append(total).append('\n');
+        out.append("╭─ envelope ").append("─".repeat(width - 13)).append("╮\n");
+
+        String algLine = "  alg  " + alg;
+        out.append("│").append("  alg  ").append(Paint.bold(alg))
+                .append(" ".repeat(Math.max(1, width - 4 - algLine.length() - ALG_NOTE.length())))
+                .append(Paint.faint(ALG_NOTE)).append("  │\n");
+        out.append(envelopeLine("", width, text -> text));
+
+        // The wrap fields are drawn as they come. Only the wrapper named by alg knows what they mean.
+        String opener = env.alg() == null ? "the envelope does not say what opens this" : "opened by the " + alg + " key";
+        out.append(envelopeLine(boxTop("wrapped data key", opener, boxWidth), width, Paint::yellow));
+        for (Map.Entry<String, byte[]> field : wrap.entrySet()) {
+            out.append(row(field.getKey(), field.getValue(), nameWidth, width, Paint::yellow));
+        }
+        int arrowAt = boxWidth / 2;
+        out.append(envelopeLine("└" + "─".repeat(arrowAt - 1) + "┬" + "─".repeat(boxWidth - arrowAt - 2) + "┘",
+                width, Paint::yellow));
+        out.append(envelopeLine(" ".repeat(arrowAt) + ARROW, width, text -> text));
+
+        out.append(envelopeLine(boxTop("data", "always AES-256-GCM", boxWidth), width, Paint::cyan));
+        out.append(row("nonce", env.nonce(), nameWidth, width, Paint::cyan));
+        out.append(row("ciphertext", env.ciphertext(), nameWidth, width, Paint::cyan));
+        String sizes = (env.ciphertext().length - GCM_TAG_BYTES) + " bytes of data + " + GCM_TAG_BYTES + "-byte tag";
+        String note = " ".repeat(nameWidth + 1) + sizes;
+        out.append("│ ").append(Paint.cyan("│")).append("  ").append(Paint.faint(note))
+                .append(" ".repeat(rowWidth - note.length())).append("  ").append(Paint.cyan("│")).append(" │\n");
+        out.append(envelopeLine("└" + "─".repeat(boxWidth - 2) + "┘", width, Paint::cyan));
+
+        out.append("╰").append("─".repeat(width - 2)).append("╯\n");
         return out.toString();
     }
 
-    private static String row(String name, byte[] bytes, String note) {
-        String start = Base64.getEncoder().encodeToString(bytes);
-        start = start.length() > 8 ? start.substring(0, 8) + "…" : start;
-        return String.format("%-11s %5d bytes  %-9s %s", name, bytes.length, start, note);
+    /** One field: its name, its size, a bar in proportion to the size, and its first few bytes. */
+    private static String row(String name, byte[] value, int nameWidth, int width, UnaryOperator<String> colour) {
+        String bar = bar(value.length);
+        String preview = preview(value);
+        return "│ " + colour.apply("│") + "  "
+                + String.format("%-" + nameWidth + "s %5d bytes  ", name, value.length)
+                + colour.apply(bar) + " ".repeat(BAR_WIDTH - bar.length()) + "  "
+                + Paint.faint(preview) + " ".repeat(PREVIEW_WIDTH - preview.length())
+                + "  " + colour.apply("│") + " │\n";
     }
 
-    private static String content(String line, int width) {
-        return "│ " + line + " ".repeat(width - line.length()) + " │\n";
+    /** One full block per 64 bytes, in eighths, and never empty. A + marks a bar too long to draw. */
+    private static String bar(int bytes) {
+        int eighths = Math.max(1, Math.round(bytes * 8f / BYTES_PER_BLOCK));
+        if (eighths > BAR_WIDTH * 8) {
+            return "█".repeat(BAR_WIDTH - 1) + "+";
+        }
+        String partial = eighths % 8 == 0 ? "" : String.valueOf(PARTIAL_BLOCKS.charAt(eighths % 8));
+        return "█".repeat(eighths / 8) + partial;
     }
 
-    private static String rule(char left, String title, char right, int width) {
-        String label = title.isEmpty() ? "" : "─ " + title + " ";
-        return left + label + "─".repeat(width + 2 - label.length()) + right + "\n";
+    private static String preview(byte[] value) {
+        String start = Base64.getEncoder().encodeToString(value);
+        return start.length() > PREVIEW_WIDTH - 1 ? start.substring(0, PREVIEW_WIDTH - 1) + "…" : start;
+    }
+
+    private static String boxTop(String title, String note, int boxWidth) {
+        String left = "┌─ " + title + " ";
+        String right = " " + note + " ─┐";
+        return left + "─".repeat(Math.max(1, boxWidth - left.length() - right.length())) + right;
+    }
+
+    /** A line of the envelope's interior, padded to the envelope's width and closed with its border. */
+    private static String envelopeLine(String content, int width, UnaryOperator<String> colour) {
+        return "│ " + colour.apply(content) + " ".repeat(width - 3 - content.length()) + "│\n";
     }
 }

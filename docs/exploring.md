@@ -1,20 +1,31 @@
 # Exploring the demo
 
-Seven experiments, each a few minutes. They build on each other, but any of them
-can be done on its own. Everything you create lives under `data/`, which git
-ignores. Delete that directory whenever you want a clean start.
+Eight experiments, each a few minutes. They build on each other, but any of them
+can be done on its own.
 
-All commands run from the repository root.
+Start the prompt from the repository root:
+
+```sh
+./mvnw -q compile exec:java
+```
+
+(`./demo` does the same on macOS and Linux.) Lines below that begin with a
+bracketed prompt are typed there. The name in the brackets is the algorithm that
+wraps new data, and a new session always starts on `RSA-OAEP-3072`.
+
+Everything you create lives under `data/`, which git ignores, so it is still
+there the next time you start the prompt. Delete that directory whenever you
+want a clean start.
 
 ## 1. Watch the swap
 
-```sh
-./demo swap
+```
+[RSA-OAEP-3072] > swap
 ```
 
-This is the demo from the talk. Read `SwapDemo.java` next to the output: the
-call to `encrypt` is the same line both times, and `decrypt` is never told which
-algorithm to use. It finds out from the envelope.
+This is the demo from the talk, run entirely in memory. Read `SwapDemo.java`
+next to the output: the call to `encrypt` is the same line both times, and
+`decrypt` is never told which algorithm to use. It finds out from the envelope.
 
 Things to notice in the output:
 
@@ -24,42 +35,45 @@ Things to notice in the output:
 
 ## 2. Change the one line
 
-The `swap` demo does everything in one process. This experiment does it the way
-a real system would, across separate runs, with data on disk.
-
-```sh
-./demo write "customer record #1"
-./demo write "customer record #2"
-```
-
-Now open `config/crypto.properties` and change the last line:
-
-```properties
-crypto.wrap=ML-KEM-768
-```
-
-Write another record and read everything back:
-
-```sh
-./demo write "customer record #3"
-./demo read
-```
+The `swap` demo does everything at once. This experiment does it the way a real
+system would: over time, with data on disk.
 
 ```
-config: crypto.wrap = ML-KEM-768
+[RSA-OAEP-3072] > write customer record #1
+[RSA-OAEP-3072] > write customer record #2
+[RSA-OAEP-3072] > use ML-KEM-768
+  new data will be wrapped with ML-KEM-768
+
+[ML-KEM-768] > write customer record #3
+[ML-KEM-768] > read
   record-0001 (RSA-OAEP-3072) -> customer record #1
   record-0002 (RSA-OAEP-3072) -> customer record #2
   record-0003 (ML-KEM-768) -> customer record #3
 
-Algorithms in use: {ML-KEM-768=1, RSA-OAEP-3072=2}
+  algorithms in use: {ML-KEM-768=1, RSA-OAEP-3072=2}
 ```
 
-No code changed and nothing was migrated. To see why the old records still
-read, look at what is actually stored:
+`use` is the one-line change. In a real system that value would come from
+configuration; here it is the prompt. No code changed and nothing was migrated.
+`use` on its own lists the algorithms you can choose, and `algorithms` shows
+them as a table: what kind each is, whether it is quantum-safe, which provider
+implements it on your JVM, and how many records use it. In short:
 
-```sh
-./demo list
-./demo show 1
+| Algorithm | What it is |
+|---|---|
+| `RSA-OAEP-3072` | Classical, quantum-vulnerable |
+| `ECDH-X25519` | Classical elliptic-curve, quantum-vulnerable |
+| `AES-256-KW` | Symmetric key wrap, as a cloud KMS does it; already quantum-safe |
+| `ML-KEM-768` | Post-quantum, lattice-based (FIPS 203) |
+| `X25519+ML-KEM-768` | Hybrid of a classical and a post-quantum algorithm |
+| `HQC-192` | Post-quantum, code-based, from BouncyCastle |
+| `RSA-TOY-96` | Deliberately breakable, for experiment 7 |
+
+To see why the old records still read, look at what is actually stored:
+
+```
+[ML-KEM-768] > list
+[ML-KEM-768] > show 1
 ```
 
 `list` gives one line per envelope and `show` draws one field by field. Neither
@@ -67,35 +81,32 @@ loads a key or decrypts anything, and both can still tell you the algorithm,
 because it is stored in the clear next to the data it protects. The files
 themselves are plain text under `data/envelopes/` if you want to open one.
 
-Run `./demo show` with no record to draw them all. The RSA envelope has one
-large wrapped key; the ML-KEM envelope has a small wrapped key plus a KEM
-ciphertext. The `data` section has the same shape in both.
+Run `show` with no record to draw them all. Each drawing has the wrapped data
+key on top and the data it opens underneath, with a bar beside every field drawn
+to scale at one block per 64 bytes. The RSA envelope has one large wrapped key;
+the ML-KEM envelope has a small wrapped key plus a much larger KEM ciphertext.
+The `data` section has the same shape in both.
 
-The last line of the output is an inventory. In a real system, being able to
-answer "which algorithms is our stored data still using?" is the first thing a
+The last line of `read` is an inventory. In a real system, being able to answer
+"which algorithms is our stored data still using?" is the first thing a
 migration needs, and you only get it if every envelope names its algorithm.
 
 ## 3. Retire an algorithm without re-encrypting the data
 
-Two records are still wrapped with RSA. With `crypto.wrap` still set to
-`ML-KEM-768`:
-
-```sh
-./demo rewrap
-```
+Two records are still wrapped with RSA. With the prompt still on `ML-KEM-768`:
 
 ```
-config: crypto.wrap = ML-KEM-768
+[ML-KEM-768] > rewrap
   record-0001 RSA-OAEP-3072 -> ML-KEM-768
   record-0002 RSA-OAEP-3072 -> ML-KEM-768
   record-0003 already ML-KEM-768
 
-Re-wrapped 2 data key(s) of 32 bytes each. Re-encrypted 0 of 68 data bytes.
+  re-wrapped 2 data key(s) of 32 bytes each, re-encrypted 0 of 68 data bytes
 ```
 
 Look at `rewrap` in `EnvelopeCrypto.java`. It unwraps the 32-byte data key with
 the old algorithm and wraps it with the new one. The ciphertext is carried over
-as it is. Compare the `ciphertext=` line of a record before and after to check.
+as it is. Compare the `ciphertext` row of `show 1` before and after to check.
 
 That is the property that makes this practical at scale: moving a terabyte of
 data to a new wrapping algorithm costs one small key operation per object, not a
@@ -104,73 +115,100 @@ terabyte of re-encryption.
 One caveat worth knowing: re-wrapping protects the data key from now on. It does
 nothing for copies of the old RSA-wrapped envelope that someone already took.
 That is the "harvest now, decrypt later" problem, and it is why starting early
-matters.
+matters. Experiment 7 makes it concrete.
 
 ## 4. Break it on purpose
 
-```sh
-./demo pitfalls
+```
+[RSA-OAEP-3072] > pitfalls
 ```
 
 This runs two failures in memory: an envelope that does not say how it was
 wrapped, and an algorithm retired while data still depends on it. Then try some
-by hand on your own stored records:
+by hand on your own stored records, editing the files under `data/envelopes/`:
 
-- **Change an envelope's `alg` line** to a different registered algorithm, then
-  run `./demo read`. The wrong wrapper is chosen and the unwrap fails.
+- **Change an envelope's `alg` line** to a different algorithm, then `read`. The
+  wrong wrapper is chosen and the unwrap fails.
 - **Change one character of a `ciphertext=` line.** AES-GCM is authenticated, so
   the read fails with a tag mismatch rather than returning garbage.
-- **Retire an algorithm too early.** Write a record under RSA, then delete the
-  `RsaWrapper` line from the `registry` method in `Workspace.java` and run
-  `./demo read`. The record is unreadable until you put the line back. Now do it
-  in the right order: put the line back, `./demo rewrap`, then remove it.
-- **Set `crypto.wrap` to something unknown**, such as `HQC-256`. The error lists
-  what is registered.
+- **Retire an algorithm too early.** Write a record under RSA, `exit`, delete the
+  `RsaWrapper` line from the `registry` method in `Workspace.java`, and start the
+  prompt again. `read` reports the record as unreadable until you put the line
+  back. Now do it in the right order: put the line back, `use ML-KEM-768`,
+  `rewrap`, then remove it.
+- **Ask for something unknown**, such as `use SIKE-p434`. The error lists what is
+  registered.
 
 ## 5. Add your own algorithm
 
-The claim is that a new algorithm costs one class, one registry line and one
-config line. Check it by adding ML-KEM-1024, the larger parameter set.
+The claim is that a new algorithm costs one class and one registry line. Check
+it by adding ML-KEM-1024, the larger parameter set.
 
 1. **One class.** Copy `wrappers/MlKemWrapper.java` to
    `wrappers/MlKem1024Wrapper.java`. Rename the class, and change the two
    `"ML-KEM-768"` strings (the key pair generator and `algId`) to
-   `"ML-KEM-1024"`.
+   `"ML-KEM-1024"`. In `facts()`, which describes the algorithm for the
+   inventory in experiment 8, change the levels to `256, 5`, the parameter set
+   to `"1024"`, and the OID to `"2.16.840.1.101.3.4.4.3"`.
 2. **One registry line.** In the `registry` method of `demos/Workspace.java`,
    add:
 
    ```java
-   .register(new MlKem1024Wrapper(keys.keyPair("ml-kem-1024", MlKem1024Wrapper::newKeyPair)))
+   register(new MlKem1024Wrapper(keys.keyPair("ml-kem-1024", MlKem1024Wrapper::newKeyPair)));
    ```
 
-3. **One config line.** Set `crypto.wrap=ML-KEM-1024` in
-   `config/crypto.properties`.
+Start the prompt again so the change is compiled, then:
 
-```sh
-./demo write "wrapped with my own algorithm"
-./demo read
+```
+[RSA-OAEP-3072] > use ML-KEM-1024
+[ML-KEM-1024] > write wrapped with my own algorithm
+[ML-KEM-1024] > read
 ```
 
 The new record reads, and so does everything written before. You did not touch
-`EnvelopeCrypto`, the store, or any of the commands.
+`EnvelopeCrypto`, the store, or any of the commands, and tab completion already
+offers the new name.
 
-For something harder, try a wrapper for a different key size of RSA, or one
-backed by a library such as BouncyCastle for an algorithm the JDK does not have
-yet, such as HQC.
+`wrappers/HqcWrapper.java` is the same exercise done with an algorithm the JDK
+does not have. HQC comes from BouncyCastle, through the same KEM API, and the
+class is nearly line for line the same as `MlKemWrapper`. Try `use HQC-192`,
+write a record and `show` it: the KEM ciphertext is 8978 bytes against
+ML-KEM's 1088, too long for its bar to be drawn to scale.
 
-## 6. Read the hybrid
+For something harder, try a wrapper for a different key size of RSA, or for
+another BouncyCastle KEM such as FrodoKEM.
 
-Set `crypto.wrap=X25519+ML-KEM-768`, write a record, and read
-`wrappers/HybridWrapper.java`.
+## 6. Read the hybrid, and the one that was never at risk
+
+Before the hybrid, try `AES-256-KW` and read `wrappers/AesKwWrapper.java`. Here
+an AES-256 key wraps the AES-256 data key. That is what envelope encryption with
+a cloud KMS usually does: the wrapping key stays inside the KMS, and only the
+32-byte data key goes in and out. It is already quantum-safe, because a quantum
+computer only halves the strength of AES. The catch is that it is symmetric:
+whoever can wrap can unwrap, so it only works where writer and reader share the
+key. Public-key wrapping is what lets strangers send each other keys, and it is
+the part that needs replacing.
+
+Now the hybrid.
+
+```
+[RSA-OAEP-3072] > use X25519+ML-KEM-768
+[X25519+ML-KEM-768] > write belt and braces
+[X25519+ML-KEM-768] > show
+```
+
+Then read `wrappers/HybridWrapper.java`.
 
 A hybrid wraps the data key under a key derived from two shared secrets: one
 from a classical algorithm (X25519) and one from a post-quantum algorithm
 (ML-KEM). An attacker has to break both. This is the cautious choice while
 ML-KEM is new, and it is the approach TLS has taken with X25519MLKEM768.
 
-Notice what it took to add: one class and one registry line. It needed more
-bytes in the envelope than either algorithm alone, and the envelope shape
-already had room for them.
+Notice what it took to add: one class and one registry line. It also stores a
+field no other wrapper has. In the `show` output you will see `ephemeralKey`
+next to `kemCt`. Nothing outside `HybridWrapper` knows that field exists: a
+wrapped key is a set of named byte fields chosen by the wrapper, and the
+envelope, the store and the commands carry them as they come.
 
 `HybridWrapper` is here to show the idea. It is not the X-Wing construction and
 has had no security review, so treat it as reading material rather than
@@ -184,46 +222,42 @@ The attack here is classical and only works because the key is tiny. What it
 shows is the consequence, which is the same one Shor's algorithm on a large
 quantum computer would have for real RSA.
 
-Set `crypto.wrap=RSA-TOY-96` and write a secret:
+Write a secret under the toy key:
 
-```sh
-./demo write "the merger closes on Friday"
-./demo list
+```
+[RSA-OAEP-3072] > use RSA-TOY-96
+[RSA-TOY-96] > write the merger closes on Friday
+  saved record-0001: {alg=RSA-TOY-96, ciphertext=..., wrappedKey=36 bytes}
 ```
 
 Note the id of the new record; the commands below assume `record-0001`. Now play
-the attacker and take a copy of the envelope. No keys, only the stored file:
+the attacker and take a copy of the envelope. No keys, only the stored file. In
+a second terminal:
 
 ```sh
 cp data/envelopes/record-0001.envelope data/harvested.envelope
 ```
 
-Time passes. The defenders do everything right: they set
-`crypto.wrap=ML-KEM-768` and re-wrap.
-
-```sh
-./demo rewrap
-./demo crack 1
-```
+Time passes. The defenders do everything right: they move to ML-KEM and re-wrap.
 
 ```
-record-0001 (ML-KEM-768)
-  not attempted: this is not RSA, so there is no modulus to factor.
+[RSA-TOY-96] > use ML-KEM-768
+[ML-KEM-768] > rewrap
+[ML-KEM-768] > crack 1
+  record-0001 (ML-KEM-768)
+    not attempted: this is not RSA, so there is no modulus to factor.
 ```
 
 The stored record is safe now. The copy is not:
 
-```sh
-./demo crack data/harvested.envelope
 ```
-
-```
-data/harvested.envelope (RSA-TOY-96)
-  public key: n = 45113622079573034424233906421 (96 bits), e = 65537
-  factoring n with Pollard's rho, using only the public key...
-  factored in 3.1 s: n = 187612018428161 x 240462324871261
-  data key unwrapped with the rebuilt private key
-  plaintext -> the merger closes on Friday
+[ML-KEM-768] > crack data/harvested.envelope
+  data/harvested.envelope (RSA-TOY-96)
+    public key: n = 45113622079573034424233906421 (96 bits), e = 65537
+    factoring n with Pollard's rho, using only the public key...
+    factored in 3.1 s: n = 187612018428161 x 240462324871261
+    data key unwrapped with the rebuilt private key
+    plaintext -> the merger closes on Friday
 ```
 
 `crack` reads `data/keys/rsa-toy.pub` and the envelope, and nothing else. Read
@@ -241,18 +275,69 @@ Two things to take from this:
 
 To feel the difference key length makes, change `MODULUS_BITS` in
 `ToyRsaWrapper.java`. Each extra 8 bits makes the factoring roughly four times
-slower. The algorithm name follows the constant, so at 104 bits you would set
-`crypto.wrap=RSA-TOY-104`. Delete `data/keys/rsa-toy.key` afterwards so a new key
-is generated; records already wrapped with the old one will stop reading.
+slower. The algorithm name follows the constant, so at 104 bits it becomes
+`RSA-TOY-104`. Delete `data/keys/rsa-toy.key` afterwards so a new key is
+generated; records already wrapped with the old one will stop reading.
+
+## 8. Take inventory
+
+Before you can migrate anything, you have to find it. The industry's answer is a
+cryptographic bill of materials (CBOM): a list of every algorithm and key in use,
+in the CycloneDX standard format. Write records under a few algorithms, then:
+
+```
+[ML-KEM-768] > cbom
+  ALGORITHM          KEY  QUANTUM-SAFE  NIST LEVEL  RECORDS
+  AES-256-GCM        DEK  yes                    5        6
+  RSA-OAEP-3072      KEK  NO                     0        2
+  ECDH-X25519        KEK  NO                     0        1
+  ML-KEM-768         KEK  yes                    3        2
+  HQC-192            KEK  yes                    3        1
+
+  3 of 6 records still depend on a key wrap that is not quantum-safe
+  wrote data/cbom.json (CycloneDX 1.6)
+```
+
+The KEY column says which key each algorithm is used with, in NIST's terms. The
+DEK (data-encryption key) is the per-record AES-256 key that encrypts the data;
+the KEK (key-encryption key) is the key that wraps it. Every row that is not
+quantum-safe is a KEK. The DEK algorithm is never the problem.
+
+Nothing was decrypted to produce this. Every envelope names its algorithm, so
+the inventory is a query rather than an investigation. Without that field, the
+same question means trying keys against every record.
+
+Open `data/cbom.json`. Each algorithm is a `cryptographic-asset` component with
+its primitive, parameter set, OID, and NIST quantum security level, where 0
+means a quantum computer breaks it. Each key file appears as key material linked
+to its algorithm and marked as a KEK, and a property lists which records each algorithm protects.
+Because it is a standard format, other CBOM tools can read it.
+
+Where the facts come from: each wrapper describes itself through a `facts()`
+method from the `Inventoried` interface, so they live in the same class as the
+algorithm. `KeyWrapper` itself still has its three methods. The records that make
+up the file are in `cbom/CycloneDx.java`, a small slice of the full CycloneDX
+format; the official `cyclonedx-core-java` library models all of it.
+
+Then close the loop: `use ML-KEM-768`, `rewrap`, and `cbom` again. The last line
+turns green. That is the shape of a real migration: inventory, move, and
+inventory again to prove it.
+
+Try editing one envelope's `alg` line to something nobody registered, such as
+`SIKE-p434`, the post-quantum candidate that was broken on a laptop in 2022. The
+inventory lists it as unknown and counts its records as at risk.
 
 ## Going further
 
 - Run the tests with `./mvnw test`. The test names read as sentences and state
   what the code guarantees. Change something and see which sentence stops being
   true.
-- The `alg` field is the only header in this envelope, and nothing authenticates
-  it. Real formats protect their headers; JWE, for example, feeds the protected
-  header into AES-GCM as associated data. Try adding a key version to the
-  envelope and binding the header that way.
+- `keys` lists the key files under `data/keys/`. An envelope names its algorithm
+  but not which key was used, so two keys under the same algorithm cannot
+  coexist. Give a wrapper a `keyId` field of its own and have it pick the key
+  from that. No other class needs to change.
+- Nothing authenticates the `alg` field. Real formats protect their headers;
+  JWE, for example, feeds the protected header into AES-GCM as associated data.
+  Try binding the header that way.
 - Compare this skeleton with the real formats in
   [envelope-shapes.md](envelope-shapes.md).

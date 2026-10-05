@@ -14,6 +14,12 @@ import java.security.SecureRandom;
  */
 public final class EnvelopeCrypto {
 
+    /** The algorithm that encrypts the data itself, whatever wraps the key. */
+    public static final String DATA_ALG_ID = "AES-256-GCM";
+
+    public static final AlgorithmFacts DATA_FACTS = AlgorithmFacts.of("ae", 256, 5, "keygen", "encrypt", "decrypt", "tag")
+            .withParameterSet("256").withMode("gcm").withOid("2.16.840.1.101.3.4.1.46");
+
     private static final SecureRandom RNG = new SecureRandom();
 
     private EnvelopeCrypto() {}
@@ -28,7 +34,7 @@ public final class EnvelopeCrypto {
         c.init(Cipher.ENCRYPT_MODE, dek, new GCMParameterSpec(128, nonce));
         byte[] ct = c.doFinal(plaintext);
         WrappedDek w = wrapper.wrap(dek);                        // the only algorithm-dependent line
-        return new Envelope(wrapper.algId(), nonce, ct, w.wrappedKey(), w.kemCt(), w.wrapNonce());
+        return new Envelope(wrapper.algId(), nonce, ct, w);      // and the envelope says which one it was
     }
 
     public static byte[] decrypt(Envelope env, WrapperRegistry registry) throws GeneralSecurityException {
@@ -47,7 +53,6 @@ public final class EnvelopeCrypto {
     public static Envelope rewrap(Envelope env, WrapperRegistry registry, KeyWrapper target)
             throws GeneralSecurityException {
         SecretKey dek = registry.get(env.alg()).unwrap(env.wrappedDek());
-        WrappedDek w = target.wrap(dek);
-        return new Envelope(target.algId(), env.nonce(), env.ciphertext(), w.wrappedKey(), w.kemCt(), w.wrapNonce());
+        return new Envelope(target.algId(), env.nonce(), env.ciphertext(), target.wrap(dek));
     }
 }

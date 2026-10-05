@@ -3,6 +3,9 @@ package com.callibrity.cryptoagility.store;
 import com.callibrity.cryptoagility.envelope.Envelope;
 import com.callibrity.cryptoagility.envelope.KeyWrapper;
 import com.callibrity.cryptoagility.envelope.WrapperRegistry;
+import com.callibrity.cryptoagility.wrappers.AesKwWrapper;
+import com.callibrity.cryptoagility.wrappers.EcdhWrapper;
+import com.callibrity.cryptoagility.wrappers.HqcWrapper;
 import com.callibrity.cryptoagility.wrappers.HybridWrapper;
 import com.callibrity.cryptoagility.wrappers.MlKemWrapper;
 import com.callibrity.cryptoagility.wrappers.RsaWrapper;
@@ -47,6 +50,27 @@ class DemoKeysTest {
         }
 
         @Test
+        void an_aes_wrapping_key_still_opens_what_it_wrapped() throws GeneralSecurityException, IOException {
+            Envelope env = encrypt(PLAINTEXT, aesKw());
+
+            assertArrayEquals(PLAINTEXT, decrypt(env, new WrapperRegistry().register(aesKw())));
+        }
+
+        @Test
+        void ecdh_still_opens_what_it_wrapped() throws GeneralSecurityException, IOException {
+            Envelope env = encrypt(PLAINTEXT, ecdh());
+
+            assertArrayEquals(PLAINTEXT, decrypt(env, new WrapperRegistry().register(ecdh())));
+        }
+
+        @Test
+        void hqc_from_bouncycastle_still_opens_what_it_wrapped() throws GeneralSecurityException, IOException {
+            Envelope env = encrypt(PLAINTEXT, hqc());
+
+            assertArrayEquals(PLAINTEXT, decrypt(env, new WrapperRegistry().register(hqc())));
+        }
+
+        @Test
         void the_hybrid_still_opens_what_it_wrapped() throws GeneralSecurityException, IOException {
             Envelope env = encrypt(PLAINTEXT, hybrid());
 
@@ -62,6 +86,19 @@ class DemoKeysTest {
 
     private KeyWrapper mlKem() throws GeneralSecurityException, IOException {
         return new MlKemWrapper(new DemoKeys(dir).keyPair("ml-kem", MlKemWrapper::newKeyPair));
+    }
+
+    private KeyWrapper aesKw() throws IOException {
+        return new AesKwWrapper(AesKwWrapper.fromFields(
+                new DemoKeys(dir).fields("aes.key", () -> AesKwWrapper.toFields(AesKwWrapper.newKey()))));
+    }
+
+    private KeyWrapper ecdh() throws GeneralSecurityException, IOException {
+        return new EcdhWrapper(new DemoKeys(dir).keyPair("ecdh", EcdhWrapper::newKeyPair));
+    }
+
+    private KeyWrapper hqc() throws GeneralSecurityException, IOException {
+        return new HqcWrapper(new DemoKeys(dir).keyPair("hqc", HqcWrapper::newKeyPair));
     }
 
     private KeyWrapper hybrid() throws GeneralSecurityException, IOException {

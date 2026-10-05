@@ -52,7 +52,7 @@ class ToyRsaWrapperTest {
         void refuses_a_wrapped_key_of_the_wrong_size() {
             var toy = new ToyRsaWrapper();
 
-            assertThrows(InvalidKeyException.class, () -> toy.unwrap(new WrappedDek(new byte[384], null, null)));
+            assertThrows(InvalidKeyException.class, () -> toy.unwrap(WrappedDek.of("wrappedKey", new byte[384])));
         }
     }
 

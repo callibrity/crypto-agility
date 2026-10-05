@@ -1,6 +1,7 @@
 package com.callibrity.cryptoagility.store;
 
 import com.callibrity.cryptoagility.envelope.Envelope;
+import com.callibrity.cryptoagility.envelope.WrappedDek;
 import com.callibrity.cryptoagility.store.EnvelopeStore.Stored;
 import org.junit.jupiter.api.DisplayNameGeneration;
 import org.junit.jupiter.api.DisplayNameGenerator;
@@ -12,23 +13,34 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Arrays;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @DisplayNameGeneration(DisplayNameGenerator.ReplaceUnderscores.class)
 class EnvelopeStoreTest {
 
     private static final Envelope DIRECT =
-            new Envelope("RSA-OAEP-3072", bytes(12, 1), bytes(40, 2), bytes(384, 3), null, null);
+            new Envelope("RSA-OAEP-3072", bytes(12, 1), bytes(40, 2), WrappedDek.of("wrappedKey", bytes(384, 3)));
     private static final Envelope KEM =
-            new Envelope("ML-KEM-768", bytes(12, 4), bytes(40, 5), bytes(48, 6), bytes(1088, 7), bytes(12, 8));
+            new Envelope("ML-KEM-768", bytes(12, 4), bytes(40, 5), new WrappedDek(kemFields()));
 
     @TempDir
     Path dir;
+
+    private static Map<String, byte[]> kemFields() {
+        Map<String, byte[]> fields = new LinkedHashMap<>();
+        fields.put("wrappedKey", bytes(48, 6));
+        fields.put("kemCt", bytes(1088, 7));
+        fields.put("wrapNonce", bytes(12, 8));
+        return fields;
+    }
 
     private static byte[] bytes(int length, int fill) {
         byte[] b = new byte[length];
@@ -63,7 +75,7 @@ class EnvelopeStoreTest {
         }
 
         @Test
-        void keeps_every_field_of_a_kem_envelope() throws IOException {
+        void keeps_every_field_of_the_wrapped_key_in_order() throws IOException {
             var store = new EnvelopeStore(dir);
 
             store.add(KEM);
@@ -71,20 +83,38 @@ class EnvelopeStoreTest {
             Envelope loaded = store.all().getFirst().envelope();
             assertArrayEquals(KEM.nonce(), loaded.nonce());
             assertArrayEquals(KEM.ciphertext(), loaded.ciphertext());
-            assertArrayEquals(KEM.wrappedKey(), loaded.wrappedKey());
-            assertArrayEquals(KEM.kemCt(), loaded.kemCt());
-            assertArrayEquals(KEM.wrapNonce(), loaded.wrapNonce());
+            Map<String, byte[]> fields = loaded.wrappedDek().fields();
+            assertEquals(List.of("wrappedKey", "kemCt", "wrapNonce"), List.copyOf(fields.keySet()));
+            assertArrayEquals(bytes(48, 6), fields.get("wrappedKey"));
+            assertArrayEquals(bytes(1088, 7), fields.get("kemCt"));
+            assertArrayEquals(bytes(12, 8), fields.get("wrapNonce"));
         }
 
         @Test
-        void leaves_the_kem_fields_absent_for_a_directly_wrapped_key() throws IOException {
+        void stores_a_field_it_has_never_heard_of() throws IOException {
+            var store = new EnvelopeStore(dir);
+            var novel = new Envelope("SOMETHING-NEW", bytes(12, 1), bytes(40, 2), WrappedDek.of("keyVersion", bytes(4, 9)));
+
+            store.add(novel);
+
+            assertArrayEquals(bytes(4, 9), store.all().getFirst().envelope().wrappedDek().fields().get("keyVersion"));
+        }
+
+        @Test
+        void refuses_a_wrap_field_that_would_shadow_the_envelope_header() {
+            var store = new EnvelopeStore(dir);
+            var clashing = new Envelope("SOMETHING-NEW", bytes(12, 1), bytes(40, 2), WrappedDek.of("alg", bytes(4, 9)));
+
+            assertThrows(IllegalArgumentException.class, () -> store.add(clashing));
+        }
+
+        @Test
+        void stores_only_the_fields_the_wrapper_produced() throws IOException {
             var store = new EnvelopeStore(dir);
 
             store.add(DIRECT);
 
-            Envelope loaded = store.all().getFirst().envelope();
-            assertNull(loaded.kemCt());
-            assertNull(loaded.wrapNonce());
+            assertEquals(Set.of("wrappedKey"), store.all().getFirst().envelope().wrappedDek().fields().keySet());
         }
 
         @Test

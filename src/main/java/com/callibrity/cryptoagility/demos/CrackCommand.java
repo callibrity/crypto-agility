@@ -3,6 +3,8 @@ package com.callibrity.cryptoagility.demos;
 import com.callibrity.cryptoagility.envelope.Envelope;
 import com.callibrity.cryptoagility.envelope.WrapperRegistry;
 import com.callibrity.cryptoagility.store.EnvelopeStore.Stored;
+import com.callibrity.cryptoagility.wrappers.AesKwWrapper;
+import com.callibrity.cryptoagility.wrappers.EcdhWrapper;
 import com.callibrity.cryptoagility.wrappers.RsaWrapper;
 import com.callibrity.cryptoagility.wrappers.ToyRsaWrapper;
 
@@ -10,7 +12,6 @@ import java.io.IOException;
 import java.math.BigInteger;
 import java.nio.file.NoSuchFileException;
 import java.security.GeneralSecurityException;
-import java.util.List;
 
 import static com.callibrity.cryptoagility.envelope.EnvelopeCrypto.decrypt;
 import static java.nio.charset.StandardCharsets.UTF_8;
@@ -27,52 +28,56 @@ final class CrackCommand {
 
     private CrackCommand() {}
 
-    static void run(String record) throws GeneralSecurityException, IOException {
-        List<Stored> targets = StoreCommands.select(record);
+    static void run(Workspace ws, String record) throws GeneralSecurityException, IOException {
         WrapperRegistry stolen = null;
-        for (Stored target : targets) {
+        for (Stored target : StoreCommands.select(ws, record)) {
             Envelope env = target.envelope();
-            System.out.printf("%s (%s)%n", target.id(), env.alg());
+            System.out.printf("  %s (%s)%n", Paint.bold(target.id()), env.alg());
             if (!ToyRsaWrapper.ALG_ID.equals(env.alg())) {
-                System.out.println("  not attempted: " + whyNot(env.alg()) + "\n");
+                System.out.println("    " + Paint.green("not attempted") + ": " + whyNot(env.alg()));
                 continue;
             }
             if (stolen == null) {
-                stolen = new WrapperRegistry().register(new ToyRsaWrapper(recoverKeys()));
+                stolen = new WrapperRegistry().register(new ToyRsaWrapper(recoverKeys(ws)));
             }
-            System.out.println("  data key unwrapped with the rebuilt private key");
-            System.out.println("  plaintext -> " + new String(decrypt(env, stolen), UTF_8) + "\n");
+            System.out.println("    data key unwrapped with the rebuilt private key");
+            System.out.println("    " + Paint.red("plaintext -> " + new String(decrypt(env, stolen), UTF_8)));
         }
         if (stolen != null) {
-            System.out.println("That was a classical attack on a deliberately tiny key. Real RSA-3072 is safe");
-            System.out.println("from a laptop, but Shor's algorithm on a large quantum computer would do the same to it.");
+            System.out.println("\n  That was a classical attack on a deliberately tiny key. Real RSA-3072 is safe from");
+            System.out.println("  a laptop, but Shor's algorithm on a large quantum computer would do the same to it.");
         }
     }
 
-    private static ToyRsaWrapper.Keys recoverKeys() throws IOException {
-        ToyRsaWrapper.PublicKey publicKey = publicKey();
+    private static ToyRsaWrapper.Keys recoverKeys(Workspace ws) throws IOException {
+        ToyRsaWrapper.PublicKey publicKey = publicKey(ws);
         BigInteger n = publicKey.modulus();
-        System.out.printf("  public key: n = %s (%d bits), e = %s%n", n, n.bitLength(), publicKey.exponent());
-        System.out.println("  factoring n with Pollard's rho, using only the public key...");
+        System.out.printf("    public key: n = %s (%d bits), e = %s%n", n, n.bitLength(), publicKey.exponent());
+        System.out.println("    factoring n with Pollard's rho, using only the public key...");
         long start = System.nanoTime();
         BigInteger p = Factoring.findFactor(n);
         double seconds = (System.nanoTime() - start) / 1e9;
-        System.out.printf("  factored in %.1f s: n = %s x %s%n", seconds, p, n.divide(p));
+        System.out.printf("    factored in %.1f s: n = %s x %s%n", seconds, p, n.divide(p));
         return ToyRsaWrapper.Keys.fromFactor(publicKey, p);
     }
 
-    private static ToyRsaWrapper.PublicKey publicKey() throws IOException {
+    private static ToyRsaWrapper.PublicKey publicKey(Workspace ws) throws IOException {
         try {
-            return Workspace.toyRsaPublicKey();
+            return ws.toyRsaPublicKey();
         } catch (NoSuchFileException e) {
-            Demo.fail("the toy public key is missing from data/keys, so there is nothing to factor");
-            throw e;
+            throw new UsageException("the toy public key file is missing, so there is nothing to factor");
         }
     }
 
     private static String whyNot(String alg) {
         if (RsaWrapper.ALG_ID.equals(alg)) {
             return "a 3072-bit modulus is far beyond a laptop. It is not beyond Shor's algorithm.";
+        }
+        if (AesKwWrapper.ALG_ID.equals(alg)) {
+            return "this is symmetric, so there is no public key to attack. Grover's algorithm only halves AES-256.";
+        }
+        if (EcdhWrapper.ALG_ID.equals(alg)) {
+            return "an elliptic curve is far beyond a laptop too. It is not beyond Shor's algorithm.";
         }
         return "this is not RSA, so there is no modulus to factor.";
     }

@@ -6,8 +6,9 @@ import javax.crypto.Cipher;
 import javax.crypto.SecretKey;
 import javax.crypto.spec.GCMParameterSpec;
 import java.security.GeneralSecurityException;
-import java.security.InvalidKeyException;
 import java.security.SecureRandom;
+import java.util.LinkedHashMap;
+import java.util.Map;
 
 /**
  * The second half of every KEM-based wrapper. A KEM hands you a shared secret,
@@ -16,28 +17,29 @@ import java.security.SecureRandom;
  */
 final class AesGcmKeyWrap {
 
+    static final String WRAPPED_KEY = "wrappedKey";
+    static final String WRAP_NONCE = "wrapNonce";
+
     private static final SecureRandom RNG = new SecureRandom();
 
     private AesGcmKeyWrap() {}
 
-    static WrappedDek wrap(SecretKey kek, SecretKey dek, byte[] kemCt) throws GeneralSecurityException {
+    /** Wraps the data key and returns it together with the fields the KEM needs to find the key again. */
+    static WrappedDek wrap(SecretKey kek, SecretKey dek, Map<String, byte[]> kemFields) throws GeneralSecurityException {
         byte[] nonce = new byte[12];
         RNG.nextBytes(nonce);
         var c = Cipher.getInstance("AES/GCM/NoPadding");
         c.init(Cipher.WRAP_MODE, kek, new GCMParameterSpec(128, nonce));
-        return new WrappedDek(c.wrap(dek), kemCt, nonce);
+        Map<String, byte[]> fields = new LinkedHashMap<>();
+        fields.put(WRAPPED_KEY, c.wrap(dek));
+        fields.putAll(kemFields);
+        fields.put(WRAP_NONCE, nonce);
+        return new WrappedDek(fields);
     }
 
-    static SecretKey unwrap(SecretKey kek, WrappedDek w) throws GeneralSecurityException {
+    static SecretKey unwrap(SecretKey kek, WrappedDek w, String algId) throws GeneralSecurityException {
         var c = Cipher.getInstance("AES/GCM/NoPadding");
-        c.init(Cipher.UNWRAP_MODE, kek, new GCMParameterSpec(128, w.wrapNonce()));
-        return (SecretKey) c.unwrap(w.wrappedKey(), "AES", Cipher.SECRET_KEY);
-    }
-
-    /** A wrapped key that never went through a KEM has nothing for a KEM-based wrapper to open. */
-    static void requireKemFields(WrappedDek w, String algId) throws InvalidKeyException {
-        if (w.kemCt() == null || w.wrapNonce() == null) {
-            throw new InvalidKeyException("wrapped key has no KEM ciphertext, so it was not wrapped with " + algId);
-        }
+        c.init(Cipher.UNWRAP_MODE, kek, new GCMParameterSpec(128, w.require(WRAP_NONCE, algId)));
+        return (SecretKey) c.unwrap(w.require(WRAPPED_KEY, algId), "AES", Cipher.SECRET_KEY);
     }
 }
