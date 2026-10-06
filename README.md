@@ -14,7 +14,7 @@ Post-quantum migration is not a one-time swap. Algorithms get broken and the
 standard set keeps changing, so the skill worth building is the ability to change
 algorithms cheaply. Two things make that possible:
 
-1. **Isolate crypto behind one seam.** Call sites ask for "encrypt", not "RSA".
+1. **Isolate crypto behind one seam.** Call sites ask to seal an envelope, not for RSA.
 2. **Store the algorithm identity with the data.** Old data stays readable under
    the old algorithm while new data uses the new one.
 
@@ -113,7 +113,7 @@ Everything is under `src/main/java/com/callibrity/cryptoagility/`.
 
 | Package | What is there |
 |---|---|
-| `envelope` | The `Envelope`, and `EnvelopeCrypto` with `encrypt`, `decrypt` and `rewrap` |
+| `envelope` | The `Envelope`, which can `seal` data under a KMS key, `open` itself, and `rewrap` itself onto another key |
 | `kms` | `KeyManagementService`, shaped like AWS KMS or Google Cloud KMS, and `LocalKms`, a stand-in that keeps its keys in files |
 | `wrapper` | The key-wrapping seam (`KeyWrapper`) and one class per algorithm: `RsaWrapper` and `EcdhWrapper` (classical), `AesKwWrapper` (symmetric, as a cloud KMS does it), `MlKemWrapper` and `HqcWrapper` (post-quantum), and `HybridWrapper` |
 | `cipher` | The data-encryption seam (`DataCipher`) and its two implementations, `AesGcm` and `ChaCha20Poly1305` |
@@ -138,13 +138,21 @@ Each wrapper lives inside the KMS: `LocalKms` uses them as its engine, the way a
 real KMS has an implementation per key type. Supporting a new algorithm is one
 more `KeyWrapper` class and one register line in `LocalKms`.
 
+There are two seams, one per layer. The wrap is chosen by naming a KMS key; its
+algorithm belongs to the key, so the application never sees it. The data cipher
+is chosen by passing a `DataCipher`, because the data is encrypted here, in the
+application. Neither is named where data is sealed: both come from
+configuration, and the envelope records both.
+
 ### The one line that involves the KEK
+
+This is `Envelope.seal`, the one place data gets encrypted:
 
 ```java
 DataKey dataKey = kms.generateDataKey(keyId, cipher.keySpec());   // the only line that involves the KEK
-Sealed sealed = cipher.seal(dataKey.key(), plaintext);      // the data never goes to the KMS
+Encrypted encrypted = cipher.encrypt(dataKey.key(), plaintext);   // the data never goes to the KMS
 return new Envelope(dataKey.algorithm(), keyId, cipher.algId(),   // and the envelope says what it used
-        sealed.nonce(), sealed.ciphertext(), dataKey.wrapped());
+        encrypted.nonce(), encrypted.ciphertext(), dataKey.wrapped());
 ```
 
 The application never holds a KEK. It names a KMS key and gets back a fresh data

@@ -7,11 +7,11 @@ import java.util.Arrays;
  * with its tag. Two are equal when their bytes are, and toString shows sizes
  * rather than bytes.
  */
-public record Sealed(byte[] nonce, byte[] ciphertext) {
+public record Encrypted(byte[] nonce, byte[] ciphertext) {
 
     @Override
     public boolean equals(Object other) {
-        return other instanceof Sealed that
+        return other instanceof Encrypted that
                 && Arrays.equals(nonce, that.nonce)
                 && Arrays.equals(ciphertext, that.ciphertext);
     }
@@ -23,7 +23,7 @@ public record Sealed(byte[] nonce, byte[] ciphertext) {
 
     @Override
     public String toString() {
-        return "Sealed[nonce=" + size(nonce) + ", ciphertext=" + size(ciphertext) + "]";
+        return "Encrypted[nonce=" + size(nonce) + ", ciphertext=" + size(ciphertext) + "]";
     }
 
     private static String size(byte[] bytes) {

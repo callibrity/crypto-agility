@@ -28,26 +28,26 @@ public final class AesGcm implements DataCipher {
     public DataKeySpec keySpec() { return DataKeySpec.AES_256; }
 
     @Override
-    public Sealed seal(SecretKey dataKey, byte[] plaintext) throws GeneralSecurityException {
+    public Encrypted encrypt(SecretKey dataKey, byte[] plaintext) throws GeneralSecurityException {
         var c = Cipher.getInstance(TRANSFORMATION);
         c.init(Cipher.ENCRYPT_MODE, aes(dataKey));                // no nonce given, so the JDK picks a fresh one
         byte[] ciphertext = c.doFinal(plaintext);
-        return new Sealed(c.getIV(), ciphertext);
+        return new Encrypted(c.getIV(), ciphertext);
     }
 
     @Override
-    public byte[] open(SecretKey dataKey, byte[] nonce, byte[] ciphertext) throws GeneralSecurityException {
+    public byte[] decrypt(SecretKey dataKey, byte[] nonce, byte[] ciphertext) throws GeneralSecurityException {
         var c = Cipher.getInstance(TRANSFORMATION);
         c.init(Cipher.DECRYPT_MODE, aes(dataKey), new GCMParameterSpec(TAG_BITS, nonce));
         return c.doFinal(ciphertext);
     }
 
     /** Wraps one key under another: the same cipher, used on a key instead of data. */
-    public static Sealed wrap(SecretKey kek, SecretKey key) throws GeneralSecurityException {
+    public static Encrypted wrap(SecretKey kek, SecretKey key) throws GeneralSecurityException {
         var c = Cipher.getInstance(TRANSFORMATION);
         c.init(Cipher.WRAP_MODE, aes(kek));                       // no nonce given, so the JDK picks a fresh one
         byte[] wrapped = c.wrap(key);
-        return new Sealed(c.getIV(), wrapped);
+        return new Encrypted(c.getIV(), wrapped);
     }
 
     public static SecretKey unwrap(SecretKey kek, byte[] nonce, byte[] wrapped) throws GeneralSecurityException {

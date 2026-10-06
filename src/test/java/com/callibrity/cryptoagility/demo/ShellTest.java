@@ -26,7 +26,6 @@ import java.nio.file.Path;
 import java.security.GeneralSecurityException;
 import java.util.List;
 
-import static com.callibrity.cryptoagility.envelope.EnvelopeCrypto.decrypt;
 import static java.nio.charset.StandardCharsets.UTF_8;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -56,7 +55,7 @@ class ShellTest {
 
     private String plaintextOf(int index) throws IOException, GeneralSecurityException {
         Envelope env = ws.envelopes().all().get(index).envelope();
-        return new String(decrypt(env, ws.kms()), UTF_8);
+        return new String(env.open(ws.kms()), UTF_8);
     }
 
     @Nested

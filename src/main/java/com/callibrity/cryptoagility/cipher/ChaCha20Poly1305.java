@@ -29,15 +29,15 @@ public final class ChaCha20Poly1305 implements DataCipher {
     public DataKeySpec keySpec() { return DataKeySpec.CHACHA20; }
 
     @Override
-    public Sealed seal(SecretKey dataKey, byte[] plaintext) throws GeneralSecurityException {
+    public Encrypted encrypt(SecretKey dataKey, byte[] plaintext) throws GeneralSecurityException {
         var c = Cipher.getInstance(TRANSFORMATION);
         c.init(Cipher.ENCRYPT_MODE, chacha(dataKey));             // no nonce given, so the JDK picks a fresh one
         byte[] ciphertext = c.doFinal(plaintext);
-        return new Sealed(c.getIV(), ciphertext);
+        return new Encrypted(c.getIV(), ciphertext);
     }
 
     @Override
-    public byte[] open(SecretKey dataKey, byte[] nonce, byte[] ciphertext) throws GeneralSecurityException {
+    public byte[] decrypt(SecretKey dataKey, byte[] nonce, byte[] ciphertext) throws GeneralSecurityException {
         var c = Cipher.getInstance(TRANSFORMATION);
         c.init(Cipher.DECRYPT_MODE, chacha(dataKey), new IvParameterSpec(nonce));
         return c.doFinal(ciphertext);

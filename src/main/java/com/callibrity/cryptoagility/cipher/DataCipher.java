@@ -13,7 +13,7 @@ import java.security.GeneralSecurityException;
  */
 public interface DataCipher extends Inventoried {
 
-    /** The name written into every envelope this cipher seals. */
+    /** The name written into every envelope that uses this cipher. */
     String algId();
 
     /** The data key this cipher needs, for asking the KMS to generate one. */
@@ -25,7 +25,7 @@ public interface DataCipher extends Inventoried {
      * AES-GCM and ChaCha20-Poly1305, using a nonce twice under the same key is
      * a disaster.
      */
-    Sealed seal(SecretKey dataKey, byte[] plaintext) throws GeneralSecurityException;
+    Encrypted encrypt(SecretKey dataKey, byte[] plaintext) throws GeneralSecurityException;
 
-    byte[] open(SecretKey dataKey, byte[] nonce, byte[] ciphertext) throws GeneralSecurityException;
+    byte[] decrypt(SecretKey dataKey, byte[] nonce, byte[] ciphertext) throws GeneralSecurityException;
 }

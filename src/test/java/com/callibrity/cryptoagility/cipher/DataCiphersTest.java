@@ -44,12 +44,12 @@ class DataCiphersTest {
 
         @ParameterizedTest
         @MethodSource("com.callibrity.cryptoagility.cipher.DataCiphersTest#ciphers")
-        void opens_what_it_sealed(DataCipher cipher) throws GeneralSecurityException {
+        void decrypts_what_it_encrypted(DataCipher cipher) throws GeneralSecurityException {
             SecretKey key = keyFor(cipher);
 
-            Sealed sealed = cipher.seal(key, PLAINTEXT);
+            Encrypted encrypted = cipher.encrypt(key, PLAINTEXT);
 
-            assertArrayEquals(PLAINTEXT, cipher.open(key, sealed.nonce(), sealed.ciphertext()));
+            assertArrayEquals(PLAINTEXT, cipher.decrypt(key, encrypted.nonce(), encrypted.ciphertext()));
         }
 
         @ParameterizedTest
@@ -57,8 +57,8 @@ class DataCiphersTest {
         void chooses_a_fresh_nonce_every_time(DataCipher cipher) throws GeneralSecurityException {
             SecretKey key = keyFor(cipher);
 
-            Sealed first = cipher.seal(key, PLAINTEXT);
-            Sealed second = cipher.seal(key, PLAINTEXT);
+            Encrypted first = cipher.encrypt(key, PLAINTEXT);
+            Encrypted second = cipher.encrypt(key, PLAINTEXT);
 
             assertEquals(12, first.nonce().length);
             assertFalse(Arrays.equals(first.nonce(), second.nonce()));
@@ -68,10 +68,10 @@ class DataCiphersTest {
         @MethodSource("com.callibrity.cryptoagility.cipher.DataCiphersTest#ciphers")
         void rejects_tampered_ciphertext(DataCipher cipher) throws GeneralSecurityException {
             SecretKey key = keyFor(cipher);
-            Sealed sealed = cipher.seal(key, PLAINTEXT);
-            sealed.ciphertext()[0] ^= 1;
+            Encrypted encrypted = cipher.encrypt(key, PLAINTEXT);
+            encrypted.ciphertext()[0] ^= 1;
 
-            assertThrows(AEADBadTagException.class, () -> cipher.open(key, sealed.nonce(), sealed.ciphertext()));
+            assertThrows(AEADBadTagException.class, () -> cipher.decrypt(key, encrypted.nonce(), encrypted.ciphertext()));
         }
 
         @ParameterizedTest

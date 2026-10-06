@@ -122,7 +122,7 @@ Two records are still wrapped with RSA. With the prompt still on `ML-KEM-768`:
   re-wrapped 2 data key(s), re-encrypted 0 of 68 data bytes
 ```
 
-Look at `rewrap` in `EnvelopeCrypto.java`, then `reEncrypt` in `LocalKms.java`.
+Look at `rewrap` in `Envelope.java`, then `reEncrypt` in `LocalKms.java`.
 The application hands the KMS a wrapped data key and the id of the new key; the
 KMS unwraps it and wraps it again inside itself, so the plaintext data key never
 reaches the application. AWS calls this operation ReEncrypt. The ciphertext is
@@ -211,7 +211,7 @@ Start the prompt again so the change is compiled, then:
 ```
 
 The new record reads, and so does everything written before. You did not touch
-`EnvelopeCrypto`, the store, or any of the commands; tab completion, `algs`,
+`Envelope`, the store, or any of the commands; tab completion, `algs`,
 `keys` and `cbom` already know the new algorithm, and `algs` shows it served by
 BouncyCastle's `BC` provider.
 

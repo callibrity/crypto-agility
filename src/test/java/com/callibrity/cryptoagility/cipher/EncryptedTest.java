@@ -10,15 +10,15 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 
 @DisplayNameGeneration(DisplayNameGenerator.ReplaceUnderscores.class)
-class SealedTest {
+class EncryptedTest {
 
     @Nested
     class Comparing {
 
         @Test
         void equal_bytes_make_equal_values() {
-            var first = new Sealed(new byte[] {1, 2}, new byte[] {3, 4});
-            var second = new Sealed(new byte[] {1, 2}, new byte[] {3, 4});
+            var first = new Encrypted(new byte[] {1, 2}, new byte[] {3, 4});
+            var second = new Encrypted(new byte[] {1, 2}, new byte[] {3, 4});
 
             assertEquals(first, second);
             assertEquals(first.hashCode(), second.hashCode());
@@ -26,7 +26,7 @@ class SealedTest {
 
         @Test
         void different_bytes_make_different_values() {
-            assertNotEquals(new Sealed(new byte[] {1}, new byte[] {2}), new Sealed(new byte[] {1}, new byte[] {9}));
+            assertNotEquals(new Encrypted(new byte[] {1}, new byte[] {2}), new Encrypted(new byte[] {1}, new byte[] {9}));
         }
     }
 
@@ -35,9 +35,9 @@ class SealedTest {
 
         @Test
         void shows_sizes_and_never_the_bytes() {
-            String text = new Sealed(new byte[12], new byte[] {42, 42, 42}).toString();
+            String text = new Encrypted(new byte[12], new byte[] {42, 42, 42}).toString();
 
-            assertEquals("Sealed[nonce=12 bytes, ciphertext=3 bytes]", text);
+            assertEquals("Encrypted[nonce=12 bytes, ciphertext=3 bytes]", text);
             assertFalse(text.contains("42"));
         }
     }

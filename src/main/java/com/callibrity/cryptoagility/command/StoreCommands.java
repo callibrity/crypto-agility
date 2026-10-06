@@ -2,7 +2,6 @@ package com.callibrity.cryptoagility.command;
 
 import com.callibrity.cryptoagility.cipher.DataCipher;
 import com.callibrity.cryptoagility.envelope.Envelope;
-import com.callibrity.cryptoagility.envelope.EnvelopeCrypto;
 import com.callibrity.cryptoagility.kms.KeyMetadata;
 import com.callibrity.cryptoagility.store.EnvelopeStore.Stored;
 import com.callibrity.cryptoagility.store.EnvelopeStore;
@@ -19,8 +18,6 @@ import java.util.Map;
 import java.util.TreeMap;
 import java.util.stream.Collectors;
 
-import static com.callibrity.cryptoagility.envelope.EnvelopeCrypto.decrypt;
-import static com.callibrity.cryptoagility.envelope.EnvelopeCrypto.encrypt;
 import static java.nio.charset.StandardCharsets.UTF_8;
 
 /**
@@ -37,10 +34,10 @@ public final class StoreCommands {
 
     private StoreCommands() {}
 
-    /** Encrypts the text under a fresh data key from the KMS, and saves the envelope. */
+    /** Seals the text in a new envelope under a fresh data key from the KMS, and saves it. */
     public static void write(PrintWriter out, Workspace ws, KeyMetadata key, DataCipher cipher, String text)
             throws GeneralSecurityException, IOException {
-        Envelope env = encrypt(text.getBytes(UTF_8), ws.kms(), key.keyId(), cipher);
+        Envelope env = Envelope.seal(text.getBytes(UTF_8), ws.kms(), key.keyId(), cipher);
         String id = ws.envelopes().add(env);
         out.println("  " + Paint.green("saved " + id) + ": " + env.summary());
     }
@@ -83,7 +80,7 @@ public final class StoreCommands {
             }
             Envelope after;
             try {
-                after = EnvelopeCrypto.rewrap(before, ws.kms(), target.keyId());
+                after = before.rewrap(ws.kms(), target.keyId());
             } catch (GeneralSecurityException e) {
                 out.println(Paint.red(String.format("  %s SKIPPED, still %s: %s", stored.id(), before.alg(), e.getMessage())));
                 skipped++;
@@ -181,7 +178,7 @@ public final class StoreCommands {
 
     private static String plaintextOrFailure(Envelope env, Workspace ws) {
         try {
-            return new String(decrypt(env, ws.kms()), UTF_8);
+            return new String(env.open(ws.kms()), UTF_8);
         } catch (GeneralSecurityException | IOException e) {
             return Paint.red("UNREADABLE: " + e.getMessage());
         }

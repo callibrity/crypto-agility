@@ -1,0 +1,34 @@
+# ============================================================
+#  Retire demo  -  governing the migration
+#  Run:  rm -rf data && ./demo --script docs/retire.demo
+#  The rule: inventory with cbom, move with rewrap, THEN retire.
+#  Lines starting with # are presenter notes and are skipped.
+# ============================================================
+
+# A record wrapped with RSA, from before the migration.
+write Patient MRN-5001, dob 1983-06-14, dx CKD
+
+# Move new data to post-quantum. RSA is no longer the current algorithm.
+use ML-KEM-768
+write Patient MRN-5002, dob 1991-03-02, dx COPD
+
+# Retire RSA too early, before moving the old data. Watch what it strands.
+retire RSA-OAEP-3072
+read
+
+# A disabled key still exists, so we can bring it back.
+enable RSA-OAEP-3072
+read
+
+# The right order: move the old data off RSA first...
+rewrap
+list
+
+# ...then retire RSA for real. Now nothing depends on it.
+retire RSA-OAEP-3072
+read
+
+# Prove it: the inventory shows no RSA left.
+cbom
+
+exit
