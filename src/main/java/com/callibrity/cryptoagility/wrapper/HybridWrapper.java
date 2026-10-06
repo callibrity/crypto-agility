@@ -64,6 +64,8 @@ public final class HybridWrapper implements KeyWrapper, Inventoried {
   }
 
   public HybridWrapper(KeyPair x25519, KeyPair mlKem) throws GeneralSecurityException {
+    // The name says ML-KEM-768, so the ML-KEM half must be an ML-KEM-768 key.
+    MlKemWrapper.requireParameterSet(MlKemWrapper.ParameterSet.ML_KEM_768, mlKem);
     this.kem = KEM.getInstance("ML-KEM");
     this.x25519 = x25519;
     this.mlKem = mlKem;

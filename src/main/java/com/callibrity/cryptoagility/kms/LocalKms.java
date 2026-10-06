@@ -65,9 +65,9 @@ public final class LocalKms implements KeyManagementService {
   private static final String DISABLED = "disabled";
   private static final SecureRandom RNG = new SecureRandom();
 
-  // BouncyCastle supplies algorithms the JDK lacks, such as HQC. Its providers go in at start-up,
-  // after the JDK's
-  // own, so that a stored key can be decoded before anything else has touched BouncyCastle.
+  // BouncyCastle supplies algorithms the JDK lacks: BCPQC serves HQC, and BC serves others you
+  // might add, such as FrodoKEM. Both go in at start-up, after the JDK's own providers, so that a
+  // stored key can be decoded before anything else has touched BouncyCastle.
   static {
     Security.addProvider(new BouncyCastleProvider());
     Security.addProvider(new BouncyCastlePQCProvider());

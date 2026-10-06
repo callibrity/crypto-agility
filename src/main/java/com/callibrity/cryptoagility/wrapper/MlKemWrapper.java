@@ -80,15 +80,20 @@ public final class MlKemWrapper implements KeyWrapper, Inventoried {
   }
 
   public MlKemWrapper(ParameterSet parameterSet, KeyPair kp) throws GeneralSecurityException {
-    // The name in every envelope comes from parameterSet, so it had better match the key.
+    requireParameterSet(parameterSet, kp);
+    this.kem = KEM.getInstance("ML-KEM"); // family name; the key fixes the parameter set
+    this.parameterSet = parameterSet;
+    this.kp = kp;
+  }
+
+  // The name in every envelope comes from the parameter set, so it had better match the key.
+  static void requireParameterSet(ParameterSet parameterSet, KeyPair kp)
+      throws InvalidKeyException {
     if (kp.getPublic().getParams() instanceof NamedParameterSpec spec
         && !spec.getName().equals(parameterSet.algId)) {
       throw new InvalidKeyException(
           "an " + spec.getName() + " key cannot be used as " + parameterSet.algId);
     }
-    this.kem = KEM.getInstance("ML-KEM"); // family name; the key fixes the parameter set
-    this.parameterSet = parameterSet;
-    this.kp = kp;
   }
 
   public static KeyPair newKeyPair() throws GeneralSecurityException {
@@ -118,9 +123,8 @@ public final class MlKemWrapper implements KeyWrapper, Inventoried {
     return AesGcmKeyWrap.unwrap(kek, w, algId());
   }
 
-  // FIPS 203 puts the three parameter sets in NIST categories 1, 3 and 5: about as hard to break as
-  // AES-128,
-  // AES-192 and AES-256, against classical and quantum attackers alike.
+  // FIPS 203 puts the three parameter sets in NIST categories 1, 3 and 5: about as hard to break
+  // as AES-128, AES-192 and AES-256, against classical and quantum attackers alike.
   @Override
   public AlgorithmFacts facts() {
     return AlgorithmFacts.of(

@@ -34,7 +34,7 @@ import org.jline.terminal.TerminalBuilder;
 import org.jline.utils.NonBlockingReader;
 
 /**
- * Runs the REPL from a script so the demo can be presented hands-free: the prompt sits there
+ * Runs the REPL from a script so the demo can be played back hands-free: the prompt sits there
  * showing the current algorithm, you press a key, and the next command types itself and runs. It
  * uses the same Shell as the live prompt, so state carries across commands exactly as if you typed
  * them, and the same Workspace, so it reads and writes the same data.

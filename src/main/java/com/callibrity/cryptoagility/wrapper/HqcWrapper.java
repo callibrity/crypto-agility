@@ -133,11 +133,9 @@ public final class HqcWrapper implements KeyWrapper, Inventoried {
     return AesGcmKeyWrap.unwrap(kek, w, algId());
   }
 
-  // The three parameter sets target NIST categories 1, 3 and 5, like ML-KEM's. There is no standard
-  // OID yet.
-  // Until there is, BouncyCastle writes its own into every HQC key, so keys made today carry an
-  // identifier
-  // that will change later.
+  // The three parameter sets target NIST categories 1, 3 and 5, like ML-KEM's. There is no
+  // standard OID yet. Until there is, BouncyCastle writes its own into every HQC key, so keys made
+  // today carry an identifier that will change later.
   @Override
   public AlgorithmFacts facts() {
     return AlgorithmFacts.of(

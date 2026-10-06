@@ -66,8 +66,7 @@ public final class CbomCommand {
   private static final String UNKNOWN = "unknown";
 
   // NIST's names for the two kinds of key in envelope encryption (SP 800-57). CycloneDX has no
-  // field for what
-  // a key is for, so they are recorded as a property.
+  // field for what a key is for, so they are recorded as a property.
   private static final String DEK = "dek"; // data-encryption key: one per record, encrypts the data
   private static final String KEK = "kek"; // key-encryption key: held by the KMS, wraps the DEKs
 
@@ -107,6 +106,12 @@ public final class CbomCommand {
     }
     if (all.isEmpty()) {
       out.println("  nothing stored yet, try: write hello");
+    } else if (vulnerable == 0 && damaged > 0) {
+      // A record nobody can read is not proven safe, so there is no all-clear while one exists.
+      out.println(
+          "  "
+              + Paint.yellow(
+                  "the readable records are quantum-safe; the damaged ones are unknown"));
     } else if (vulnerable == 0) {
       out.println("  " + Paint.green("every record is wrapped with a quantum-safe algorithm"));
     } else {
@@ -135,7 +140,7 @@ public final class CbomCommand {
         component.properties().add(property("provider", cipher.provider()));
       }
       components.add(component);
-      algorithmRefs.add(algorithmRef(alg));
+      algorithmRefs.add(algorithmRef(DEK, alg));
     }
 
     Map<String, List<String>> recordsByKey = recordsBy(all, Envelope::kid);
@@ -148,17 +153,17 @@ public final class CbomCommand {
         component.properties().add(property("provider", info.provider()));
       }
       components.add(component);
-      algorithmRefs.add(algorithmRef(alg));
+      algorithmRefs.add(algorithmRef(KEK, alg));
       List<String> keyRefs = new ArrayList<>();
       for (KeyMetadata key : keys) {
         if (key.algorithm().equals(alg)) {
           Component material =
-              key(key, algorithmRef(alg), recordsByKey.getOrDefault(key.keyId(), List.of()));
+              key(key, algorithmRef(KEK, alg), recordsByKey.getOrDefault(key.keyId(), List.of()));
           components.add(material);
           keyRefs.add(material.bomRef());
         }
       }
-      dependencies.add(new Dependency(algorithmRef(alg), keyRefs));
+      dependencies.add(new Dependency(algorithmRef(KEK, alg), keyRefs));
     }
     dependencies.addFirst(new Dependency(STORE_REF, algorithmRefs));
 
@@ -238,7 +243,7 @@ public final class CbomCommand {
       notes.add(property("provisionalOidAssignedBy", facts.provisionalOidSource()));
     }
     return Component.cryptographicAsset(
-        algorithmRef(name),
+        algorithmRef(keyRole, name),
         name,
         CryptoProperties.algorithm(properties, facts == null ? null : facts.oid()),
         notes);
@@ -264,8 +269,10 @@ public final class CbomCommand {
             property("recordIds", String.join(",", recordIds))));
   }
 
-  private static String algorithmRef(String alg) {
-    return "crypto/algorithm/" + alg;
+  private static String algorithmRef(String keyRole, String alg) {
+    // Scoped by role, so a name that turns up as both a DEK and a KEK algorithm still gets two
+    // distinct refs, as CycloneDX requires.
+    return "crypto/algorithm/" + keyRole + "/" + alg;
   }
 
   private static Property property(String name, String value) {

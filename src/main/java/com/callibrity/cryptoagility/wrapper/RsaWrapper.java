@@ -34,11 +34,9 @@ public final class RsaWrapper implements KeyWrapper, Inventoried {
   private static final String WRAPPED_KEY = "wrappedKey";
   private static final String TRANSFORMATION = "RSA/ECB/OAEPPadding";
 
-  // Spelled out, because the JDK's "OAEPWithSHA-256AndMGF1Padding" quietly uses SHA-1 inside MGF1,
-  // and other
-  // libraries read that name as SHA-256 throughout. An algorithm name that means different things
-  // to different
-  // readers is its own agility problem.
+  // Spelled out, because the JDK's "OAEPWithSHA-256AndMGF1Padding" quietly uses SHA-1 inside
+  // MGF1, and other libraries read that name as SHA-256 throughout. An algorithm name that means
+  // different things to different readers is its own agility problem.
   private static final OAEPParameterSpec OAEP_SHA256 =
       new OAEPParameterSpec(
           "SHA-256", "MGF1", MGF1ParameterSpec.SHA256, PSource.PSpecified.DEFAULT);

@@ -68,4 +68,10 @@ public final class Workspace {
             .max(Comparator.comparing(KeyMetadata::created).thenComparing(KeyMetadata::keyId));
     return newest.isPresent() ? newest.get() : kms.createKey(algorithm);
   }
+
+  /** Whether an algorithm has been retired: the KMS has keys for it, and every one is disabled. */
+  public boolean retired(String algorithm) throws IOException {
+    var keys = kms.listKeys().stream().filter(key -> key.algorithm().equals(algorithm)).toList();
+    return !keys.isEmpty() && keys.stream().noneMatch(KeyMetadata::enabled);
+  }
 }

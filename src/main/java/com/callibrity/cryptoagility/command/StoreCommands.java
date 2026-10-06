@@ -122,7 +122,7 @@ public final class StoreCommands {
       dataBytes += before.ciphertext().length;
     }
     out.printf(
-        "%n  re-wrapped %d data key(s), re-encrypted 0 of %d data bytes%n", moved, dataBytes);
+        "%n  re-wrapped %d data key(s), re-encrypted 0 of %d ciphertext bytes%n", moved, dataBytes);
     if (skipped > 0) {
       out.printf("  %d record(s) could not be re-wrapped and were left as they were%n", skipped);
     }

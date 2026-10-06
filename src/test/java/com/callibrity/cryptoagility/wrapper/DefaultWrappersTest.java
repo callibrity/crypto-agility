@@ -25,7 +25,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import com.callibrity.cryptoagility.cbom.Inventoried;
 import java.security.GeneralSecurityException;
 import java.security.InvalidKeyException;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import javax.crypto.SecretKey;
 import javax.crypto.spec.SecretKeySpec;
 import org.junit.jupiter.api.DisplayNameGeneration;
@@ -90,6 +92,46 @@ class DefaultWrappersTest {
 
       assertTrue(e.getMessage().contains("no kemCt field"));
       assertTrue(e.getMessage().contains("ML-KEM-768"));
+    }
+  }
+
+  @Nested
+  class The_hybrid {
+
+    private final SecretKey dataKey = new SecretKeySpec(new byte[32], "AES");
+
+    // A copy of the wrapped key with the last byte of one field flipped.
+    private WrappedDek tampered(WrappedDek wrapped, String field) {
+      Map<String, byte[]> fields = new LinkedHashMap<>(wrapped.fields());
+      byte[] bytes = fields.get(field).clone();
+      bytes[bytes.length - 1] ^= 1;
+      fields.put(field, bytes);
+      return new WrappedDek(fields);
+    }
+
+    @Test
+    void needs_the_classical_half_intact() throws GeneralSecurityException {
+      var hybrid = new HybridWrapper();
+      WrappedDek wrapped = hybrid.wrap(dataKey);
+
+      assertThrows(
+          GeneralSecurityException.class, () -> hybrid.unwrap(tampered(wrapped, "ephemeralKey")));
+    }
+
+    @Test
+    void needs_the_post_quantum_half_intact() throws GeneralSecurityException {
+      var hybrid = new HybridWrapper();
+      WrappedDek wrapped = hybrid.wrap(dataKey);
+
+      assertThrows(GeneralSecurityException.class, () -> hybrid.unwrap(tampered(wrapped, "kemCt")));
+    }
+
+    @Test
+    void refuses_an_ml_kem_key_of_another_strength() throws GeneralSecurityException {
+      var x25519 = HybridWrapper.newX25519KeyPair();
+      var key1024 = MlKemWrapper.newKeyPair(MlKemWrapper.ParameterSet.ML_KEM_1024);
+
+      assertThrows(InvalidKeyException.class, () -> new HybridWrapper(x25519, key1024));
     }
   }
 }

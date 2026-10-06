@@ -39,6 +39,7 @@ import java.io.Writer;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.security.GeneralSecurityException;
+import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -98,11 +99,11 @@ class CbomCommandTest {
     void counts_the_records_it_protects() throws GeneralSecurityException, IOException {
       Bom bom = inventory();
 
-      assertEquals("2", property(component(bom, "crypto/algorithm/RSA-OAEP-3072"), "records"));
+      assertEquals("2", property(component(bom, "crypto/algorithm/kek/RSA-OAEP-3072"), "records"));
       assertEquals(
           "record-0001,record-0002",
-          property(component(bom, "crypto/algorithm/RSA-OAEP-3072"), "recordIds"));
-      assertEquals("1", property(component(bom, "crypto/algorithm/ML-KEM-768"), "records"));
+          property(component(bom, "crypto/algorithm/kek/RSA-OAEP-3072"), "recordIds"));
+      assertEquals("1", property(component(bom, "crypto/algorithm/kek/ML-KEM-768"), "records"));
     }
 
     @Test
@@ -118,8 +119,8 @@ class CbomCommandTest {
     void says_which_kind_of_key_it_is_used_with() throws GeneralSecurityException, IOException {
       Bom bom = inventory();
 
-      assertEquals("dek", property(component(bom, "crypto/algorithm/AES-256-GCM"), "keyRole"));
-      assertEquals("kek", property(component(bom, "crypto/algorithm/ML-KEM-768"), "keyRole"));
+      assertEquals("dek", property(component(bom, "crypto/algorithm/dek/AES-256-GCM"), "keyRole"));
+      assertEquals("kek", property(component(bom, "crypto/algorithm/kek/ML-KEM-768"), "keyRole"));
     }
 
     @Test
@@ -127,7 +128,7 @@ class CbomCommandTest {
         throws GeneralSecurityException, IOException {
       Bom bom = inventory();
 
-      assertEquals("3", property(component(bom, "crypto/algorithm/AES-256-GCM"), "records"));
+      assertEquals("3", property(component(bom, "crypto/algorithm/dek/AES-256-GCM"), "records"));
     }
 
     @Test
@@ -138,7 +139,7 @@ class CbomCommandTest {
     }
 
     private int levelOf(Bom bom, String alg) {
-      return component(bom, "crypto/algorithm/" + alg)
+      return component(bom, "crypto/algorithm/kek/" + alg)
           .cryptoProperties()
           .algorithmProperties()
           .nistQuantumSecurityLevel();
@@ -153,7 +154,7 @@ class CbomCommandTest {
         throws GeneralSecurityException, IOException {
       write("HQC-192", "customer record #4");
 
-      Component hqc = component(inventory(), "crypto/algorithm/HQC-192");
+      Component hqc = component(inventory(), "crypto/algorithm/kek/HQC-192");
 
       assertNull(hqc.cryptoProperties().oid());
       assertEquals("1.3.6.1.4.1.22554.5.9.2", property(hqc, "provisionalOid"));
@@ -178,7 +179,7 @@ class CbomCommandTest {
       Files.writeString(
           original, Files.readString(original).replace("alg=RSA-OAEP-3072", "alg=SIKE-p434"));
 
-      Component sike = component(inventory(), "crypto/algorithm/SIKE-p434");
+      Component sike = component(inventory(), "crypto/algorithm/kek/SIKE-p434");
 
       assertEquals("unknown", sike.cryptoProperties().algorithmProperties().primitive());
       assertNull(sike.cryptoProperties().algorithmProperties().nistQuantumSecurityLevel());
@@ -197,7 +198,7 @@ class CbomCommandTest {
       Component key = component(inventory(), "crypto/key/" + keyId);
 
       var material = key.cryptoProperties().relatedCryptoMaterialProperties();
-      assertEquals("crypto/algorithm/ML-KEM-768", material.algorithmRef());
+      assertEquals("crypto/algorithm/kek/ML-KEM-768", material.algorithmRef());
       assertEquals(keyId, material.id());
       assertEquals("active", material.state());
       assertEquals("kek", property(key, "keyRole"));
@@ -245,7 +246,7 @@ class CbomCommandTest {
 
       assertTrue(
           json.contains("\"$schema\" : \"http://cyclonedx.org/schema/bom-1.6.schema.json\""));
-      assertTrue(json.contains("\"bom-ref\" : \"crypto/algorithm/ML-KEM-768\""));
+      assertTrue(json.contains("\"bom-ref\" : \"crypto/algorithm/kek/ML-KEM-768\""));
       assertTrue(json.contains("\"type\" : \"cryptographic-asset\""));
       assertTrue(json.contains("\"assetType\" : \"related-crypto-material\""));
       assertTrue(json.contains("\"type\" : \"key\""));
@@ -281,7 +282,8 @@ class CbomCommandTest {
     @Test
     void the_cbom_records_it() throws GeneralSecurityException, IOException {
       assertEquals(
-          "SunJCE", property(component(inventory(), "crypto/algorithm/ML-KEM-768"), "provider"));
+          "SunJCE",
+          property(component(inventory(), "crypto/algorithm/kek/ML-KEM-768"), "provider"));
     }
 
     @Test
@@ -317,10 +319,11 @@ class CbomCommandTest {
 
       Bom bom = inventory();
 
-      assertEquals("3", property(component(bom, "crypto/algorithm/AES-256-GCM"), "records"));
-      assertEquals("1", property(component(bom, "crypto/algorithm/ChaCha20-Poly1305"), "records"));
+      assertEquals("3", property(component(bom, "crypto/algorithm/dek/AES-256-GCM"), "records"));
       assertEquals(
-          "dek", property(component(bom, "crypto/algorithm/ChaCha20-Poly1305"), "keyRole"));
+          "1", property(component(bom, "crypto/algorithm/dek/ChaCha20-Poly1305"), "records"));
+      assertEquals(
+          "dek", property(component(bom, "crypto/algorithm/dek/ChaCha20-Poly1305"), "keyRole"));
     }
   }
 
@@ -354,6 +357,45 @@ class CbomCommandTest {
       var byAlg = CbomCommand.recordsByAlgorithm(List.of(new Stored("record-0001", anonymous)));
 
       assertEquals(List.of("record-0001"), byAlg.get("unknown"));
+    }
+
+    @Test
+    void every_component_still_has_its_own_ref_when_neither_algorithm_is_named()
+        throws GeneralSecurityException, IOException {
+      var nameless =
+          new Envelope(
+              null,
+              "key-000001",
+              null,
+              new byte[12],
+              new byte[34],
+              WrappedDek.of("wrappedKey", new byte[384]));
+      List<Stored> all = new ArrayList<>(ws.envelopes().all());
+      all.add(new Stored("record-0004", nameless));
+
+      Bom bom = CbomCommand.document(ws, all);
+
+      List<String> refs = bom.components().stream().map(Component::bomRef).toList();
+      assertEquals(refs.size(), Set.copyOf(refs).size(), refs.toString());
+    }
+  }
+
+  @Nested
+  class When_a_record_is_damaged {
+
+    @Test
+    void the_summary_gives_no_all_clear() throws GeneralSecurityException, IOException {
+      var fresh = new Workspace(dataDir.resolve("damaged"));
+      StoreCommands.write(
+          OUT, fresh, fresh.currentKey("ML-KEM-768"), DataCiphers.DEFAULT, "customer record #1");
+      Path file = fresh.dataDir().resolve("envelopes").resolve("record-0001.envelope");
+      Files.writeString(file, Files.readString(file).replaceFirst("nonce=.*", "nonce=!!!"));
+      var output = new StringWriter();
+
+      CbomCommand.run(new PrintWriter(output, true), fresh);
+
+      assertFalse(output.toString().contains("every record is wrapped"));
+      assertTrue(output.toString().contains("damaged ones are unknown"));
     }
   }
 }

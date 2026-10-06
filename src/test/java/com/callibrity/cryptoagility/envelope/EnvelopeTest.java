@@ -192,6 +192,18 @@ class EnvelopeTest {
     }
 
     @Test
+    void a_kid_pointed_at_another_key_of_the_same_algorithm_cannot_open_it()
+        throws GeneralSecurityException, IOException {
+      Envelope env = Envelope.seal(PLAINTEXT, kms, rsaKey, AesGcm.INSTANCE);
+      String otherRsaKey = kms.createKey(RsaWrapper.ALG_ID).keyId();
+      var redirected =
+          new Envelope(
+              env.alg(), otherRsaKey, env.enc(), env.nonce(), env.ciphertext(), env.wrappedDek());
+
+      assertThrows(GeneralSecurityException.class, () -> redirected.open(kms));
+    }
+
+    @Test
     void an_unknown_data_cipher_is_named() throws GeneralSecurityException, IOException {
       Envelope env = Envelope.seal(PLAINTEXT, kms, rsaKey, AesGcm.INSTANCE);
       var odd =

@@ -426,6 +426,53 @@ class ShellTest {
 
       assertTrue(output.toString().contains("record-0001 (RSA-OAEP-3072) -> customer record #1"));
     }
+
+    @Test
+    void use_refuses_it_rather_than_quietly_creating_a_new_key() throws IOException {
+      shell.execute("write customer record #1");
+      shell.execute("use ML-KEM-768");
+      shell.execute("rewrap");
+      shell.execute("retire RSA-OAEP-3072");
+
+      shell.execute("use RSA-OAEP-3072");
+
+      assertEquals("ML-KEM-768", shell.current());
+      assertTrue(output.toString().contains("RSA-OAEP-3072 is retired"));
+      assertTrue(
+          ws.kms().listKeys().stream()
+              .filter(key -> key.algorithm().equals("RSA-OAEP-3072"))
+              .noneMatch(KeyMetadata::enabled));
+    }
+
+    @Test
+    void a_new_session_that_starts_on_it_writes_nothing_until_another_is_chosen()
+        throws IOException {
+      shell.execute("write customer record #1");
+      shell.execute("use ML-KEM-768");
+      shell.execute("rewrap");
+      shell.execute("retire RSA-OAEP-3072");
+      var next = new Shell(ws, new PrintWriter(output));
+
+      next.execute("write customer record #2");
+      next.execute("use");
+
+      assertEquals(1, ws.envelopes().all().size());
+      assertTrue(output.toString().contains("RSA-OAEP-3072 is retired"));
+      assertTrue(output.toString().contains("(retired)"));
+    }
+
+    @Test
+    void enable_makes_it_usable_again() {
+      shell.execute("write customer record #1");
+      shell.execute("use ML-KEM-768");
+      shell.execute("rewrap");
+      shell.execute("retire RSA-OAEP-3072");
+      shell.execute("enable RSA-OAEP-3072");
+
+      shell.execute("use RSA-OAEP-3072");
+
+      assertEquals("RSA-OAEP-3072", shell.current());
+    }
   }
 
   @Nested

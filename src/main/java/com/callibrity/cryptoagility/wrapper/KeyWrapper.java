@@ -22,8 +22,8 @@ import javax.crypto.SecretKey;
  * The seam. Swap the implementation, never the call sites.
  *
  * <p>Everything that depends on the choice of algorithm lives behind these three methods. To
- * support a new algorithm, write one more implementation and register it; nothing that calls
- * encrypt or decrypt has to change.
+ * support a new algorithm, write one more implementation and register it; nothing that seals or
+ * opens an envelope has to change.
  */
 public interface KeyWrapper {
 

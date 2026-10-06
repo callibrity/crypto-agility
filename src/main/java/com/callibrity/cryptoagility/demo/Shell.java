@@ -110,15 +110,11 @@ final class Shell {
         case "algorithms", "algs" -> AlgorithmsCommand.run(out, ws, current, cipher);
         case "write" ->
             StoreCommands.write(
-                out,
-                ws,
-                ws.currentKey(current),
-                cipher,
-                required(argument, "write needs some text"));
+                out, ws, keyFor(current), cipher, required(argument, "write needs some text"));
         case "read" -> StoreCommands.read(out, ws);
         case "list", "ls" -> StoreCommands.list(out, ws);
         case "show" -> StoreCommands.show(out, ws, argument);
-        case "rewrap" -> StoreCommands.rewrap(out, ws, ws.currentKey(current));
+        case "rewrap" -> StoreCommands.rewrap(out, ws, keyFor(current));
         case "retire" ->
             retire(
                 required(argument, "retire needs an algorithm, for example: retire RSA-OAEP-3072"));
@@ -164,16 +160,25 @@ final class Shell {
     }
   }
 
+  // The key new data keys are wrapped with. A retired algorithm stays retired: quietly minting a
+  // fresh key for it would undo the retirement.
+  private KeyMetadata keyFor(String algorithm) throws GeneralSecurityException, IOException {
+    if (ws.retired(algorithm)) {
+      throw new UsageException(
+          algorithm
+              + " is retired; enable "
+              + algorithm
+              + " to use it again, or use another algorithm");
+    }
+    return ws.currentKey(algorithm);
+  }
+
   // One verb for both layers: a data cipher's name changes how data is encrypted, an algorithm's
   // name how keys are wrapped.
   private void use(String name) throws GeneralSecurityException, IOException {
     if (name.isEmpty()) {
-      out.println(
-          "  wrapping data keys with: "
-              + Paint.bold(current)
-              + " ("
-              + ws.currentKey(current).keyId()
-              + ")");
+      String key = ws.retired(current) ? "retired" : ws.currentKey(current).keyId();
+      out.println("  wrapping data keys with: " + Paint.bold(current) + " (" + key + ")");
       out.println("  encrypting data with:    " + Paint.bold(cipher.algId()));
       out.println("  wrap algorithms:         " + String.join(", ", ws.kms().algorithms()));
       out.println(
@@ -189,7 +194,7 @@ final class Shell {
     if (!ws.kms().algorithms().contains(name)) {
       throw new UsageException("no algorithm or data cipher called " + name + ", try algorithms");
     }
-    KeyMetadata key = ws.currentKey(name);
+    KeyMetadata key = keyFor(name);
     current = name;
     out.println(
         "  new data keys will be wrapped with "
