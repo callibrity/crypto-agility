@@ -1,5 +1,9 @@
 # Crypto agility
 
+[![CI](https://github.com/callibrity/crypto-agility/actions/workflows/ci.yml/badge.svg)](https://github.com/callibrity/crypto-agility/actions/workflows/ci.yml)
+[![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
+[![Java](https://img.shields.io/badge/Java-25%2B-orange.svg)](https://openjdk.org/projects/jdk/25/)
+
 Demo code for the talk **"Crypto you can change: getting ready for post-quantum
 without a rewrite"** (James Carman, Momentum Dev Conference, Oct 15 2026).
 
