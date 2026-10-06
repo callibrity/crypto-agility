@@ -120,7 +120,7 @@ Everything is under `src/main/java/com/callibrity/cryptoagility/`.
 | `store` | Envelopes kept as small text files under `data/envelopes` |
 | `cbom` | `CycloneDx`: the slice of the CycloneDX 1.6 format a cryptographic bill of materials needs, as records |
 | `command` | One class per command, the `Workspace` they share, and the `show` drawing. Commands write to a `PrintWriter` they are given |
-| `demo` | The entry point (`Demo`), the command dispatcher (`Shell`), the interactive prompt (`Repl`), and the scripted stage player (`ScriptedRepl`) |
+| `demo` | The entry point (`Demo`), the command dispatcher (`Shell`), the interactive prompt (`Repl`), and the scripted player (`ScriptedRepl`) |
 
 ### The seam
 

@@ -32,21 +32,21 @@ final class TerminalSessions {
     }
 
     /**
-     * A full terminal, like a real one on stage, with a presenter at the
-     * keyboard who presses each key only once the next prompt is showing.
+     * A full terminal, like a real one, with someone at the keyboard who
+     * presses each key only once the next prompt is showing.
      */
     static Terminal full(String keys, ByteArrayOutputStream screen) throws IOException {
         return TerminalBuilder.builder()
                 .system(false)
                 .ffm(false)
                 .jni(false)
-                .streams(new Presenter(keys, screen), screen)
+                .streams(new Typist(keys, screen), screen)
                 .type("xterm")
                 .build();
     }
 
     // Presses key n only after the screen shows its n-th prompt, then runs out.
-    private static final class Presenter extends InputStream {
+    private static final class Typist extends InputStream {
 
         private static final String PROMPT = "] > ";
         private static final long PATIENCE_MILLIS = 10_000;
@@ -55,7 +55,7 @@ final class TerminalSessions {
         private final ByteArrayOutputStream screen;
         private int pressed;
 
-        Presenter(String keys, ByteArrayOutputStream screen) {
+        Typist(String keys, ByteArrayOutputStream screen) {
             this.keys = keys;
             this.screen = screen;
         }

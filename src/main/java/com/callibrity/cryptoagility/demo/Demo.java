@@ -10,7 +10,7 @@ import java.nio.file.Path;
 
 /**
  * Entry point. With no arguments it starts the interactive prompt. With
- * {@code --script <file>} it plays that script hands-free (narrate, press Enter,
+ * {@code --script <file>} it plays that script hands-free (press a key, and
  * each command types itself and runs). With any other arguments it runs them
  * as a single command, for example "read" or "cbom".
  */

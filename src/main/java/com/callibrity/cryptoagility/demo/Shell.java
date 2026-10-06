@@ -21,7 +21,7 @@ import java.util.List;
 
 /**
  * The commands, and the one piece of state they share: which algorithm wraps
- * new data. That is the "one config line" of the talk. Change it with use and
+ * new data. In a real system it would be one line of configuration. Change it with use and
  * everything written afterwards follows it, while everything written before
  * still reads.
  *
@@ -99,7 +99,7 @@ final class Shell {
         } catch (UsageException | GeneralSecurityException | IOException e) {
             out.println(Paint.red("  error: " + e.getMessage()));
         } catch (RuntimeException e) {
-            // A bug or a bad input nobody anticipated. Report it and keep the session alive: this runs on stage.
+            // A bug or a bad input nobody anticipated. Report it and keep the session alive.
             out.println(Paint.red("  unexpected error: " + e));
         }
         out.flush();
