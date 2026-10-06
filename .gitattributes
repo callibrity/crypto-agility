@@ -1,0 +1,5 @@
+# Keep line endings stable on every platform, so wrapper updates only show real changes.
+* text=auto
+*.cmd text eol=crlf
+mvnw text eol=lf
+demo text eol=lf
