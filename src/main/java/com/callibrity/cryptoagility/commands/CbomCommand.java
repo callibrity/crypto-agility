@@ -114,9 +114,9 @@ public final class CbomCommand {
         }
         dependencies.addFirst(new Dependency(STORE_REF, algorithmRefs));
 
-        var store = new Component(ComponentType.DATA, STORE_REF, "crypto-agility-demo envelope store",
+        var store = new Component(ComponentType.DATA, STORE_REF, "crypto-agility envelope store",
                 "Envelope-encrypted records under data/envelopes", null, null);
-        var tool = new Component(ComponentType.APPLICATION, null, "crypto-agility-demo", null, null, null);
+        var tool = new Component(ComponentType.APPLICATION, null, "crypto-agility", null, null, null);
         var metadata = new Metadata(Instant.now().toString(), new Tools(List.of(tool)), store);
         return Bom.of("urn:uuid:" + UUID.randomUUID(), metadata, components, dependencies);
     }

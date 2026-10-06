@@ -5,11 +5,11 @@
     <modelVersion>4.0.0</modelVersion>
 
     <groupId>com.callibrity</groupId>
-    <artifactId>crypto-agility-demo</artifactId>
+    <artifactId>crypto-agility</artifactId>
     <version>1.0.0-SNAPSHOT</version>
     <packaging>jar</packaging>
 
-    <name>Crypto agility demo</name>
+    <name>Crypto agility</name>
     <description>Crypto agility via envelope encryption: swap the key-wrapping algorithm without a rewrite.</description>
 
     <licenses>

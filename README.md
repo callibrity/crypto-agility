@@ -1,4 +1,4 @@
-# Crypto agility demo
+# Crypto agility
 
 Demo code for the talk **"Crypto you can change: getting ready for post-quantum
 without a rewrite"** (James Carman, Momentum Dev Conference, Oct 15 2026).
