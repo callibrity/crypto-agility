@@ -43,12 +43,12 @@ list
 rewrap
 list
 
-# Policy wants NIST level 5? One word. ML-KEM-1024 is category 5 (~AES-256).
+# Need NIST category 5? Change one setting. ML-KEM-1024 is category 5 (about as strong as AES-256).
 use ML-KEM-1024
 write Patient MRN-4473, dob 1975-12-02, dx diabetes
 list
 
-# The uncomfortable part: what's actually protecting your data?
+# The question every migration starts with: what is actually protecting the stored data?
 cbom
 
 exit

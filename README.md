@@ -76,7 +76,7 @@ up arrow recalls earlier lines.
 | `rewrap` | Moves stored envelopes to the current KMS key. The KMS re-wraps each data key; the data is not touched |
 | `retire <algorithm>` | Disables every KMS key for an algorithm, and names any records that strands |
 | `enable <algorithm>` | Re-enables an algorithm's keys |
-| `keys` | Lists the KMS's keys: algorithm, state, age and how many records use each |
+| `keys` | Lists the KMS's keys: algorithm, state, when each was created, and how many records use it |
 | `cbom` | Inventories the algorithms and keys protecting stored data, and writes a CycloneDX CBOM to `data/cbom.json` |
 | `help`, `exit` | The command list, and the way out |
 
@@ -95,7 +95,9 @@ rm -rf data && ./demo --script docs/momentum.demo
 In a real terminal, press a key and the next command types itself and runs
 (in an IDE's run window, press Enter instead), with the same prompt
 and the same commands as when you type them. The script's comments explain each
-step. On Windows, use `mvnw -q compile exec:java -Dexec.args="--script docs/momentum.demo"`.
+step. On Windows, clear old data with `rmdir /s /q data` (in PowerShell,
+`Remove-Item -Recurse data`), then run
+`.\mvnw -q compile exec:java "-Dexec.args=--script docs/momentum.demo"`.
 Set `DEMO_TYPING=0` to skip the typing effect, or `DEMO_CPS` to change its speed.
 Write your own scripts the same way: one command per line, `#` for comments.
 
@@ -109,7 +111,7 @@ A single command can also be run without the prompt:
 [docs/exploring.md](docs/exploring.md) walks through seven experiments,
 including a full migration (inventory, rewrap, retire), adding an algorithm of
 your own, and taking a cryptographic inventory.
-`./mvnw test` runs the same claims as tests.
+`./mvnw test` checks the same claims automatically; the test names read as sentences.
 
 CI also checks the code's formatting (google-java-format) and license headers.
 Your own builds never do, so changes you try out are never blocked on layout;

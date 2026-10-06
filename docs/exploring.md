@@ -20,8 +20,14 @@ id and asks the KMS to work with it. Here the KMS is `LocalKms`, a stand-in that
 keeps its keys in files, shaped like AWS KMS or Google Cloud KMS.
 
 Everything you create lives under `data/`, which git ignores, so it is still
-there the next time you start the prompt. Delete that directory whenever you
-want a clean start.
+there the next time you start the prompt. What does not carry over is your `use`
+choice: every new session starts on RSA again. For a clean start, `exit` the
+prompt, delete `data/` (`rm -rf data`, or `rmdir /s /q data` on Windows), and
+start it again.
+
+Source files are named relative to
+`src/main/java/com/callibrity/cryptoagility/`, so `wrapper/HqcWrapper.java` is
+`src/main/java/com/callibrity/cryptoagility/wrapper/HqcWrapper.java`.
 
 ## 1. Watch the walkthrough
 
@@ -37,8 +43,13 @@ Things to notice as it runs:
 - The prompt's brackets change when `use` runs. That is the whole algorithm
   change. No code changes, and nothing already stored is touched.
 - `read` is never told which algorithm to use. Each envelope says.
-- The RSA-wrapped key is 384 bytes. The ML-KEM-768 one is 48 bytes, plus a
-  1088-byte KEM ciphertext. Post-quantum envelopes are bigger.
+- The RSA-wrapped key is 384 bytes. ML-KEM works differently: it is a KEM (key
+  encapsulation mechanism), which does not encrypt the data key directly.
+  Instead it produces a fresh shared secret plus a 1088-byte ciphertext that
+  only the private key can turn back into that secret, and the data key is
+  wrapped under the secret (the 48-byte `wrappedKey`). That is why ML-KEM
+  envelopes carry a `kemCt` field and RSA ones do not. Post-quantum envelopes
+  are bigger.
 - The data itself is AES-256-GCM throughout. Only the wrap changes.
 
 The experiments below take the same steps one at a time, so you can poke at
@@ -47,8 +58,8 @@ each one.
 ## 2. Change the one line
 
 Do the walkthrough's core move yourself. If you ran the script, start from a
-clean slate (`rm -rf data`) so your record numbers match the ones below. Key ids
-are random, so yours will differ.
+clean slate (`exit`, delete `data/`, and start the prompt again) so your record
+numbers match the ones below. Key ids are random, so yours will differ.
 
 ```
 [RSA-OAEP-3072] > write customer record #1
@@ -69,8 +80,8 @@ are random, so yours will differ.
 configuration; here it is the prompt. The first time an algorithm is used, the
 KMS creates a key for it. No code changed and nothing was migrated.
 
-`keys` shows what the KMS will tell you about its keys: id, algorithm, state, age
-and how many records each protects. Never the key itself.
+`keys` shows what the KMS will tell you about its keys: id, algorithm, state,
+when it was created, and how many records each protects. Never the key itself.
 
 `use` on its own lists what you can choose, and `algorithms` shows it as a
 table: what kind each is, whether it is quantum-safe, which provider implements
@@ -111,7 +122,10 @@ migration needs, and you only get it if every envelope names its algorithm.
 
 ## 3. Retire an algorithm without re-encrypting the data
 
-Two records are still wrapped with RSA. With the prompt still on `ML-KEM-768`:
+Two records are still wrapped with RSA. `rewrap` moves every record onto the
+algorithm named in the prompt, so check that the prompt still says
+`[ML-KEM-768]`. If you restarted it, it is back on RSA; run `use ML-KEM-768`
+again first.
 
 ```
 [ML-KEM-768] > rewrap
@@ -119,7 +133,7 @@ Two records are still wrapped with RSA. With the prompt still on `ML-KEM-768`:
   record-0002 RSA-OAEP-3072 (key-0208c8) -> ML-KEM-768 (key-e4e6a9)
   record-0003 already ML-KEM-768 (key-e4e6a9)
 
-  re-wrapped 2 data key(s), re-encrypted 0 of 68 data bytes
+  re-wrapped 2 data key(s), re-encrypted 0 of 68 ciphertext bytes
 ```
 
 Look at `rewrap` in `Envelope.java`, then `reEncrypt` in `LocalKms.java`.
@@ -152,6 +166,11 @@ so `enable RSA-OAEP-3072` brings it back, which makes it safe to experiment
 with. Inventory, move, retire: that is the whole migration. Experiment 7 adds
 the proof that you are done.
 
+A retired algorithm stays retired. `use RSA-OAEP-3072` is refused, and so is
+`write` in a new session, which starts on RSA, until you `use` another
+algorithm or `enable` RSA again. Nothing quietly creates a fresh RSA key behind
+your back.
+
 ## 4. Break it on purpose
 
 Try these on your own stored records. Most mean editing the files under
@@ -162,8 +181,9 @@ Try these on your own stored records. Most mean editing the files under
   ML-KEM-768, but key key-0208c8 is RSA-OAEP-3072".
 - **Change one character of a `ciphertext=` line.** AES-GCM is authenticated, so
   the read fails with a tag mismatch rather than returning garbage.
-- **Retire an algorithm too early.** Write a record under RSA, `use ML-KEM-768`,
-  and `retire RSA-OAEP-3072` without rewrapping first. `retire` names the
+- **Retire an algorithm too early.** Write a record under RSA (if you retired
+  it in experiment 3, `enable RSA-OAEP-3072` first), `use ML-KEM-768`, and
+  `retire RSA-OAEP-3072` without rewrapping first. `retire` names the
   records it just stranded, and `read` shows them as unreadable. `enable
   RSA-OAEP-3072` brings them back; then do it in the right order: `rewrap`,
   then `retire RSA-OAEP-3072`.
@@ -187,6 +207,11 @@ BouncyCastle, already a dependency, does.
    `wrapper/FrodoKemWrapper.java` and rename the class. Then:
    - Delete the `ParameterSet` enum, the `parameterSet` field and the static
      block. `LocalKms` already installs BouncyCastle's providers.
+   - Delete the constructor's check that the key matches its parameter set, and
+     the `.withProvisionalOid(...)` call in `facts()`; both use the field you
+     just removed. Don't adapt the check to the new name: BouncyCastle calls
+     FrodoKEM keys `frodokem1344aes`, so it would reject every key. Drop the
+     imports that are now unused.
    - Keep one constructor, taking a `KeyPair`, and one `newKeyPair()` method.
      Use `"frodokem1344aes"` for both `KEM.getInstance` and
      `KeyPairGenerator.getInstance`, and return `"FrodoKEM-1344-AES"` from
@@ -219,10 +244,10 @@ Then `show` the record. FrodoKEM's ciphertext is 21,696 bytes, against
 ML-KEM-1024's 1,568. Conservative designs cost bandwidth, and the envelope
 carries whatever the algorithm needs.
 
-A word of warning from writing this exercise: FrodoKEM's smaller 976 parameter
-set produces a 24-byte shared secret, not 32, so asking it for a 32-byte AES key
-fails. Each algorithm has its own sizes, and the wrapper is where that knowledge
-belongs.
+A word of warning: FrodoKEM's smaller 976 parameter set produces a 24-byte
+shared secret, not 32, so asking it for a 32-byte AES key fails, with an error
+like `Range [0, 32) out of bounds for length 24`. Each algorithm has its own
+sizes, and the wrapper is where that knowledge belongs.
 
 Strengths of one algorithm don't need new classes. `MlKemWrapper` and
 `HqcWrapper` each take a `ParameterSet`, and `LocalKms` registers every one in a
@@ -313,10 +338,10 @@ KMS about its keys.
 
 Open `data/cbom.json`. Each algorithm is a `cryptographic-asset` component with
 its primitive, parameter set, OID, and NIST quantum security level, where 0
-means a quantum computer breaks it. Each KMS key appears as key material
-linked to its algorithm, with its state (active or deactivated), its creation
-date, and the records it protects. The key itself never leaves the KMS, and the
-inventory does not need it.
+means a quantum computer breaks it. Each KMS key for an algorithm that still
+protects a record appears as key material linked to that algorithm, with its
+state (active or deactivated), its creation date, and the records it protects.
+The key itself never leaves the KMS, and the inventory does not need it.
 Because it is a standard format, other CBOM tools can read it.
 
 Where the facts come from: each wrapper and each cipher describes itself
@@ -327,7 +352,7 @@ full CycloneDX format; the official `cyclonedx-core-java` library models all of
 it.
 
 Then close the loop: `use ML-KEM-768`, `rewrap`, `retire` the old algorithms,
-and `cbom` again. The last line turns green. That is the shape of a real
+and `cbom` again. The summary line turns green. That is the shape of a real
 migration: inventory, move, retire, and inventory again to prove it.
 
 Try editing one envelope's `alg` line to something nobody registered, such as
