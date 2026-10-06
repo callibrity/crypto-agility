@@ -205,6 +205,11 @@ CBOM as JSON, and JLine provides the prompt's line editing.
 
 [docs/exploring.md](docs/exploring.md) has guided experiments with this code.
 
+## Contributing
+
+Fixes, clearer explanations and new algorithms are welcome. See
+[CONTRIBUTING.md](CONTRIBUTING.md).
+
 ## License
 
 Apache License 2.0. See [LICENSE](LICENSE).
