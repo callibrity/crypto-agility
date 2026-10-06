@@ -65,16 +65,29 @@ up arrow recalls earlier lines.
 | `list` | One line per stored envelope: algorithm, sizes and wrap fields |
 | `show [record]` | Draws a stored envelope field by field, or all of them. Nothing is decrypted |
 | `rewrap` | Moves stored envelopes to the current algorithm by re-wrapping only the data key |
-| `crack [record]` | Breaks a record wrapped with the deliberately tiny `RSA-TOY-96` key, using only the public key |
+| `retire <algorithm>` | Stops reading an algorithm for this session, and names any records that strands |
 | `keys` | Lists the key files |
 | `cbom` | Inventories the algorithms protecting stored data, and writes a CycloneDX CBOM to `data/cbom.json` |
 | `swap` | The demo from the talk, in memory: RSA, then ML-KEM, and both decrypt |
-| `pitfalls` | Two ways an algorithm change goes wrong, in memory |
 | `help`, `exit` | The command list, and the way out |
 
 Envelopes and keys are kept under `data/`, so what one session writes the next
 can read. Every session starts on RSA; the choice made with `use` is not saved.
 Delete `data/` for a clean start.
+
+### Scripted walkthrough
+
+The demo from the talk is also a script you can play back:
+
+```sh
+rm -rf data && ./demo --script docs/momentum.demo
+```
+
+Press a key and the next command types itself and runs, with the same prompt
+and the same commands as when you type them. The script's comments explain each
+step. On Windows, use `mvnw -q compile exec:java -Dexec.args="--script docs/momentum.demo"`.
+Set `DEMO_TYPING=0` to skip the typing effect, or `DEMO_CPS` to change its speed.
+Write your own scripts the same way: one command per line, `#` for comments.
 
 A single command can also be run without the prompt:
 
@@ -83,9 +96,9 @@ A single command can also be run without the prompt:
 ./mvnw -q compile exec:java -Dexec.args="swap"
 ```
 
-[docs/exploring.md](docs/exploring.md) walks through eight experiments,
-including adding an algorithm of your own, cracking a harvested envelope, and
-taking a cryptographic inventory.
+[docs/exploring.md](docs/exploring.md) walks through seven experiments,
+including a full migration (inventory, rewrap, retire), adding an algorithm of
+your own, and taking a cryptographic inventory.
 `./mvnw test` runs the same claims as tests.
 
 ## Where to look
@@ -95,10 +108,11 @@ Everything is under `src/main/java/com/callibrity/cryptoagility/`.
 | Package | What is there |
 |---|---|
 | `envelope` | The seam (`KeyWrapper`), the `Envelope`, and `EnvelopeCrypto` with `encrypt`, `decrypt` and `rewrap` |
-| `wrappers` | One class per algorithm, and the only code that knows any of them: `RsaWrapper` and `EcdhWrapper` (classical), `AesKwWrapper` (symmetric, as a KMS does it), `MlKemWrapper` and `HqcWrapper` (post-quantum), `HybridWrapper`, and the breakable `ToyRsaWrapper` |
+| `wrappers` | One class per algorithm, and the only code that knows any of them: `RsaWrapper` and `EcdhWrapper` (classical), `AesKwWrapper` (symmetric, as a KMS does it), `MlKemWrapper` and `HqcWrapper` (post-quantum), and `HybridWrapper` |
 | `store` | Envelopes and demo keys kept as small text files under `data/` |
 | `cbom` | `CycloneDx`: the slice of the CycloneDX 1.6 format a cryptographic bill of materials needs, as records |
-| `demos` | The commands (`Shell`), the prompt (`Repl`), and the registry of readable algorithms in `Workspace` |
+| `commands` | One class per command, the registry of readable algorithms in `Workspace`, and the `show` drawing. Commands write to a `PrintWriter` they are given |
+| `demos` | The entry point (`Demo`), the command dispatcher (`Shell`), the interactive prompt (`Repl`), and the scripted stage player (`ScriptedRepl`) |
 
 ### The seam
 
@@ -131,8 +145,7 @@ it needs.
 
 The envelope format is homegrown and the private keys sit unencrypted in
 `data/keys/`, so that nothing hides the skeleton. `HybridWrapper` shows the shape
-of a hybrid but is not a reviewed construction, and `ToyRsaWrapper` is broken on
-purpose. Do not hand-roll any of this in production. Use a KMS with Tink or the
+of a hybrid but is not a reviewed construction. Do not hand-roll any of this in production. Use a KMS with Tink or the
 AWS Encryption SDK, JWE when the envelope is a token crossing a boundary, or CMS
 when a standard requires it. See
 [docs/envelope-shapes.md](docs/envelope-shapes.md).

@@ -1,4 +1,4 @@
-package com.callibrity.cryptoagility.demos;
+package com.callibrity.cryptoagility.commands;
 
 import com.callibrity.cryptoagility.cbom.CycloneDx;
 import com.callibrity.cryptoagility.cbom.CycloneDx.AlgorithmProperties;
@@ -20,6 +20,7 @@ import com.callibrity.cryptoagility.envelope.UnknownAlgorithmException;
 import com.callibrity.cryptoagility.store.EnvelopeStore.Stored;
 
 import java.io.IOException;
+import java.io.PrintWriter;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.security.GeneralSecurityException;
@@ -39,7 +40,7 @@ import java.util.UUID;
  * payoff of every envelope naming its algorithm: the inventory is a query, not
  * an investigation.
  */
-final class CbomCommand {
+public final class CbomCommand {
 
     static final String FILE_NAME = "cbom.json";
 
@@ -53,34 +54,34 @@ final class CbomCommand {
 
     private CbomCommand() {}
 
-    static void run(Workspace ws) throws GeneralSecurityException, IOException {
+    public static void run(PrintWriter out, Workspace ws) throws GeneralSecurityException, IOException {
         List<Stored> all = ws.envelopes().all();
         Map<String, List<String>> recordsByAlg = recordsByAlgorithm(all);
         Path file = ws.dataDir().resolve(FILE_NAME);
         Files.createDirectories(file.getParent());
         Files.writeString(file, CycloneDx.toJson(document(ws, recordsByAlg, all.size())));
 
-        System.out.println(Paint.bold(String.format("  %-18s %-4s %-13s %10s %8s",
+        out.println(Paint.bold(String.format("  %-18s %-4s %-13s %10s %8s",
                 "ALGORITHM", "KEY", "QUANTUM-SAFE", "NIST LEVEL", "RECORDS")));
-        printRow(EnvelopeCrypto.DATA_ALG_ID, DEK, EnvelopeCrypto.DATA_FACTS, all.size());
+        printRow(out, EnvelopeCrypto.DATA_ALG_ID, DEK, EnvelopeCrypto.DATA_FACTS, all.size());
         int vulnerable = 0;
         for (Map.Entry<String, List<String>> entry : recordsByAlg.entrySet()) {
             AlgorithmFacts facts = factsFor(ws, entry.getKey());
-            printRow(entry.getKey(), KEK, facts, entry.getValue().size());
+            printRow(out, entry.getKey(), KEK, facts, entry.getValue().size());
             if (facts == null || !facts.quantumSafe()) {
                 vulnerable += entry.getValue().size();
             }
         }
-        System.out.println();
+        out.println();
         if (all.isEmpty()) {
-            System.out.println("  nothing stored yet, try: write hello");
+            out.println("  nothing stored yet, try: write hello");
         } else if (vulnerable == 0) {
-            System.out.println("  " + Paint.green("every record is wrapped with a quantum-safe algorithm"));
+            out.println("  " + Paint.green("every record is wrapped with a quantum-safe algorithm"));
         } else {
-            System.out.println("  " + Paint.red(vulnerable + " of " + all.size()
+            out.println("  " + Paint.red(vulnerable + " of " + all.size()
                     + " records still depend on a key wrap that is not quantum-safe"));
         }
-        System.out.printf("  wrote %s (CycloneDX %s)%n", file, CycloneDx.SPEC_VERSION);
+        out.printf("  wrote %s (CycloneDX %s)%n", file, CycloneDx.SPEC_VERSION);
     }
 
     /** The CBOM: one component per algorithm in use and per key, and who depends on whom. */
@@ -169,14 +170,12 @@ final class CbomCommand {
                 CryptoProperties.algorithm(properties, facts == null ? null : facts.oid()), notes);
     }
 
-    // A key-pair file holds two keys; any other key file holds one.
+    // A key-pair file holds two keys; the only other kind here holds one secret key.
     private static List<Component> keyMaterial(String keyFile, String algorithmRef) {
         if (keyFile.endsWith(".keypair")) {
             return List.of(key(keyFile, KeyType.PUBLIC_KEY, algorithmRef), key(keyFile, KeyType.PRIVATE_KEY, algorithmRef));
         }
-        KeyType type = keyFile.endsWith(".pub") ? KeyType.PUBLIC_KEY
-                : keyFile.contains("aes") ? KeyType.SECRET_KEY : KeyType.PRIVATE_KEY;
-        return List.of(key(keyFile, type, algorithmRef));
+        return List.of(key(keyFile, KeyType.SECRET_KEY, algorithmRef));
     }
 
     private static Component key(String keyFile, KeyType type, String algorithmRef) {
@@ -194,10 +193,10 @@ final class CbomCommand {
         return new Property(PREFIX + name, value);
     }
 
-    private static void printRow(String alg, String keyRole, AlgorithmFacts facts, int records) {
+    private static void printRow(PrintWriter out, String alg, String keyRole, AlgorithmFacts facts, int records) {
         String safe = quantumSafeCell(facts);
         String level = facts == null ? "-" : String.valueOf(facts.nistQuantumSecurityLevel());
-        System.out.printf("  %-18s %-4s %s %10s %8d%n", alg, keyRole.toUpperCase(), safe, level, records);
+        out.printf("  %-18s %-4s %s %10s %8d%n", alg, keyRole.toUpperCase(), safe, level, records);
     }
 
     /** "yes" in green, "NO" in red, or "unknown", padded for a table column. */

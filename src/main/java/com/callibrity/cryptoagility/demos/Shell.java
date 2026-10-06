@@ -1,10 +1,19 @@
 package com.callibrity.cryptoagility.demos;
 
+import com.callibrity.cryptoagility.commands.StoreCommands;
+import com.callibrity.cryptoagility.commands.CbomCommand;
+import com.callibrity.cryptoagility.commands.AlgorithmsCommand;
+import com.callibrity.cryptoagility.commands.SwapDemo;
+import com.callibrity.cryptoagility.commands.Workspace;
+import com.callibrity.cryptoagility.commands.UsageException;
+import com.callibrity.cryptoagility.commands.Paint;
+import com.callibrity.cryptoagility.commands.RetireCommand;
 import com.callibrity.cryptoagility.envelope.KeyWrapper;
 import com.callibrity.cryptoagility.store.EnvelopeStore.Stored;
 import com.callibrity.cryptoagility.wrappers.RsaWrapper;
 
 import java.io.IOException;
+import java.io.PrintWriter;
 import java.security.GeneralSecurityException;
 import java.util.List;
 
@@ -19,7 +28,7 @@ import java.util.List;
 final class Shell {
 
     static final List<String> COMMANDS = List.of(
-            "use", "algorithms", "write", "read", "list", "show", "rewrap", "crack", "keys", "cbom", "swap", "pitfalls", "help", "exit");
+            "use", "algorithms", "write", "read", "list", "show", "rewrap", "retire", "keys", "cbom", "swap", "help", "exit");
 
     private static final String HELP = """
               use [algorithm]   choose the algorithm that wraps new data, or list the choices
@@ -29,20 +38,22 @@ final class Shell {
               list              one line per stored envelope: algorithm, sizes, wrap fields
               show [record]     draw a stored envelope field by field, or all of them
               rewrap            move stored envelopes to the current algorithm, data untouched
-              crack [record]    break a record wrapped with the toy RSA key, using only the public key
+              retire <alg>      stop reading an algorithm for this session, and see what that strands
               keys              list the key files
               cbom              inventory the algorithms protecting stored data, and write a CycloneDX CBOM
               swap              the demo from the talk: RSA, then ML-KEM, both decrypt (in memory)
-              pitfalls          two ways an algorithm change goes wrong (in memory)
               help              this list
               exit              leave
             """;
 
     private final Workspace ws;
+    private final PrintWriter out;
     private String current = RsaWrapper.ALG_ID;
 
-    Shell(Workspace ws) {
+    /** Commands write to out: the terminal's writer at the prompt, standard output otherwise. */
+    Shell(Workspace ws, PrintWriter out) {
         this.ws = ws;
+        this.out = out;
     }
 
     /** The algorithm that wraps new data in this session. */
@@ -59,26 +70,30 @@ final class Shell {
             switch (command) {
                 case "" -> { }
                 case "use" -> use(argument);
-                case "algorithms", "algs" -> AlgorithmsCommand.run(ws, current);
-                case "write" -> StoreCommands.write(ws, currentWrapper(), required(argument, "write needs some text"));
-                case "read" -> StoreCommands.read(ws);
-                case "list", "ls" -> StoreCommands.list(ws);
-                case "show" -> StoreCommands.show(ws, argument);
-                case "rewrap" -> StoreCommands.rewrap(ws, currentWrapper());
-                case "crack" -> CrackCommand.run(ws, argument);
-                case "keys" -> StoreCommands.keys(ws);
-                case "cbom" -> CbomCommand.run(ws);
-                case "swap" -> SwapDemo.run();
-                case "pitfalls" -> PitfallsDemo.run();
-                case "help", "?" -> System.out.print(HELP);
+                case "algorithms", "algs" -> AlgorithmsCommand.run(out, ws, current);
+                case "write" -> StoreCommands.write(out, ws, currentWrapper(), required(argument, "write needs some text"));
+                case "read" -> StoreCommands.read(out, ws);
+                case "list", "ls" -> StoreCommands.list(out, ws);
+                case "show" -> StoreCommands.show(out, ws, argument);
+                case "rewrap" -> StoreCommands.rewrap(out, ws, currentWrapper());
+                case "retire" -> retire(required(argument, "retire needs an algorithm, for example: retire RSA-OAEP-3072"));
+                case "keys" -> StoreCommands.keys(out, ws);
+                case "cbom" -> CbomCommand.run(out, ws);
+                case "swap" -> SwapDemo.run(out);
+                case "help", "?" -> out.print(HELP);
                 case "exit", "quit" -> {
+                    out.flush();
                     return false;
                 }
                 default -> throw new UsageException("unknown command " + command + ", try help");
             }
         } catch (UsageException | GeneralSecurityException | IOException e) {
-            System.out.println(Paint.red("  error: " + e.getMessage()));
+            out.println(Paint.red("  error: " + e.getMessage()));
+        } catch (RuntimeException e) {
+            // A bug or a bad input nobody anticipated. Report it and keep the session alive: this runs on stage.
+            out.println(Paint.red("  unexpected error: " + e));
         }
+        out.flush();
         return true;
     }
 
@@ -102,12 +117,20 @@ final class Shell {
 
     private void use(String algId) throws GeneralSecurityException, IOException {
         if (algId.isEmpty()) {
-            System.out.println("  current:   " + Paint.bold(current));
-            System.out.println("  available: " + String.join(", ", ws.registry().algIds()));
+            out.println("  current:   " + Paint.bold(current));
+            out.println("  available: " + String.join(", ", ws.registry().algIds()));
             return;
         }
         current = ws.registry().get(algId).algId();
-        System.out.println("  new data will be wrapped with " + Paint.bold(current));
+        out.println("  new data will be wrapped with " + Paint.bold(current));
+    }
+
+    // You cannot stop reading the algorithm you are still writing with.
+    private void retire(String algId) throws GeneralSecurityException, IOException {
+        if (algId.equals(current)) {
+            throw new UsageException(algId + " is wrapping new data; use another algorithm first");
+        }
+        RetireCommand.run(out, ws, algId);
     }
 
     private KeyWrapper currentWrapper() throws GeneralSecurityException, IOException {

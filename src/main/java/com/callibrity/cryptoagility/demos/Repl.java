@@ -15,7 +15,10 @@ import org.jline.terminal.TerminalBuilder;
 import org.jline.utils.AttributedStringBuilder;
 import org.jline.utils.AttributedStyle;
 
+import com.callibrity.cryptoagility.commands.Workspace;
+
 import java.io.IOException;
+import java.io.PrintWriter;
 
 /**
  * The interactive prompt. All it adds to Shell is the terminal: line editing,
@@ -25,8 +28,11 @@ final class Repl {
 
     private Repl() {}
 
-    static void run(Shell shell) throws IOException {
+    static void run(Workspace ws) throws IOException {
         try (Terminal terminal = TerminalBuilder.builder().dumb(true).build()) {
+            // Commands print through the terminal's own writer, so their output and the line editor never collide.
+            PrintWriter out = terminal.writer();
+            var shell = new Shell(ws, out);
             LineReader reader = LineReaderBuilder.builder()
                     .terminal(terminal)
                     .completer(completer(shell))
@@ -34,7 +40,7 @@ final class Repl {
                     .parser(new DefaultParser().quoteChars(new char[0]).escapeChars(new char[0]))
                     .option(LineReader.Option.DISABLE_EVENT_EXPANSION, true)
                     .build();
-            System.out.println("Crypto agility demo. Type help for the commands, tab to complete, exit to leave.\n");
+            out.println("Crypto agility demo. Type help for the commands, tab to complete, exit to leave.\n");
             while (true) {
                 String line;
                 try {
@@ -47,7 +53,7 @@ final class Repl {
                 if (!shell.execute(line)) {
                     return;
                 }
-                System.out.println();
+                out.println();
             }
         }
     }
@@ -66,9 +72,9 @@ final class Repl {
     private static Completer completer(Shell shell) {
         return new AggregateCompleter(
                 new ArgumentCompleter(new StringsCompleter(Shell.COMMANDS), NullCompleter.INSTANCE),
-                new ArgumentCompleter(new StringsCompleter("use"), new StringsCompleter(shell::algorithms),
+                new ArgumentCompleter(new StringsCompleter("use", "retire"), new StringsCompleter(shell::algorithms),
                         NullCompleter.INSTANCE),
-                new ArgumentCompleter(new StringsCompleter("show", "crack"), new StringsCompleter(shell::recordIds),
+                new ArgumentCompleter(new StringsCompleter("show"), new StringsCompleter(shell::recordIds),
                         NullCompleter.INSTANCE));
     }
 }

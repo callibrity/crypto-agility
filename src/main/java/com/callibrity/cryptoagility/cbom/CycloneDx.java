@@ -13,7 +13,7 @@ import java.util.List;
  * inventory (CBOM) needs, as plain records. Field names match the schema, so
  * Jackson writes them out as they are; the few that are not legal Java names
  * are renamed with @JsonProperty. Empty optional fields are left out.
- *
+ * <p>
  * The full format is much larger. The official library, cyclonedx-core-java,
  * models all of it.
  *

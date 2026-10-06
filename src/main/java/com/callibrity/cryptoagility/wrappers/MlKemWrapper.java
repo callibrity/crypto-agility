@@ -8,33 +8,80 @@ import com.callibrity.cryptoagility.envelope.WrappedDek;
 import javax.crypto.KEM;
 import javax.crypto.SecretKey;
 import java.security.GeneralSecurityException;
+import java.security.InvalidKeyException;
 import java.security.KeyPair;
 import java.security.KeyPairGenerator;
+import java.security.spec.NamedParameterSpec;
 import java.util.Map;
 
-/** Post-quantum: ML-KEM encapsulates a shared secret; we AES-wrap the DEK with it. */
+/**
+ * Post-quantum: ML-KEM encapsulates a shared secret; we AES-wrap the DEK with it.
+ *
+ * FIPS 203 defines three parameter sets. They differ only in strength and size,
+ * so one class covers all three and the parameter set picks the strength. The
+ * default is ML-KEM-768, which is what NIST recommends for general use.
+ */
 public final class MlKemWrapper implements KeyWrapper, Inventoried {
+
+    /** The FIPS 203 parameter sets, each with its NIST security category and standard OID. */
+    public enum ParameterSet {
+        ML_KEM_512("ML-KEM-512", "512", 128, 1, "2.16.840.1.101.3.4.4.1"),
+        ML_KEM_768("ML-KEM-768", "768", 192, 3, "2.16.840.1.101.3.4.4.2"),
+        ML_KEM_1024("ML-KEM-1024", "1024", 256, 5, "2.16.840.1.101.3.4.4.3");
+
+        private final String algId;
+        private final String size;
+        private final int classicalSecurityLevel;
+        private final int nistQuantumSecurityLevel;
+        private final String oid;
+
+        ParameterSet(String algId, String size, int classicalSecurityLevel, int nistQuantumSecurityLevel, String oid) {
+            this.algId = algId;
+            this.size = size;
+            this.classicalSecurityLevel = classicalSecurityLevel;
+            this.nistQuantumSecurityLevel = nistQuantumSecurityLevel;
+            this.oid = oid;
+        }
+
+        public String algId() {
+            return algId;
+        }
+    }
 
     private static final String KEM_CT = "kemCt";
 
+    private final ParameterSet parameterSet;
     private final KeyPair kp;
     private final KEM kem;
 
     public MlKemWrapper() throws GeneralSecurityException {
-        this(newKeyPair());
+        this(ParameterSet.ML_KEM_768, newKeyPair(ParameterSet.ML_KEM_768));
     }
 
     public MlKemWrapper(KeyPair kp) throws GeneralSecurityException {
-        this.kem = KEM.getInstance("ML-KEM");                    // family name; the key sets the 768 param set
+        this(ParameterSet.ML_KEM_768, kp);
+    }
+
+    public MlKemWrapper(ParameterSet parameterSet, KeyPair kp) throws GeneralSecurityException {
+        // The name in every envelope comes from parameterSet, so it had better match the key.
+        if (kp.getPublic().getParams() instanceof NamedParameterSpec spec && !spec.getName().equals(parameterSet.algId)) {
+            throw new InvalidKeyException("an " + spec.getName() + " key cannot be used as " + parameterSet.algId);
+        }
+        this.kem = KEM.getInstance("ML-KEM");                    // family name; the key fixes the parameter set
+        this.parameterSet = parameterSet;
         this.kp = kp;
     }
 
     public static KeyPair newKeyPair() throws GeneralSecurityException {
-        return KeyPairGenerator.getInstance("ML-KEM-768").generateKeyPair();
+        return newKeyPair(ParameterSet.ML_KEM_768);
+    }
+
+    public static KeyPair newKeyPair(ParameterSet parameterSet) throws GeneralSecurityException {
+        return KeyPairGenerator.getInstance(parameterSet.algId).generateKeyPair();
     }
 
     @Override
-    public String algId() { return "ML-KEM-768"; }
+    public String algId() { return parameterSet.algId; }
 
     @Override
     public WrappedDek wrap(SecretKey dek) throws GeneralSecurityException {
@@ -50,11 +97,14 @@ public final class MlKemWrapper implements KeyWrapper, Inventoried {
         return AesGcmKeyWrap.unwrap(kek, w, algId());
     }
 
-    // ML-KEM-768 is NIST category 3, about as hard to break as AES-192, against classical and quantum attackers alike.
+    // FIPS 203 puts the three parameter sets in NIST categories 1, 3 and 5: about as hard to break as AES-128,
+    // AES-192 and AES-256, against classical and quantum attackers alike.
     @Override
     public AlgorithmFacts facts() {
-        return AlgorithmFacts.of("kem", 192, 3, "keygen", "encapsulate", "decapsulate")
-                .withParameterSet("768").withOid("2.16.840.1.101.3.4.4.2");
+        return AlgorithmFacts.of("kem", parameterSet.classicalSecurityLevel, parameterSet.nistQuantumSecurityLevel,
+                        "keygen", "encapsulate", "decapsulate")
+                .withParameterSet(parameterSet.size)
+                .withOid(parameterSet.oid);
     }
 
     @Override

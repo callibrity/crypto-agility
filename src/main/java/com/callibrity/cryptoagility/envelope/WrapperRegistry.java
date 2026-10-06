@@ -28,6 +28,16 @@ public final class WrapperRegistry {
         return wrapper;
     }
 
+    /**
+     * Stops reading an algorithm. Anything still wrapped with it becomes
+     * unreadable, which is why you rewrap first and retire second.
+     */
+    public KeyWrapper retire(String algId) throws UnknownAlgorithmException {
+        KeyWrapper wrapper = get(algId);
+        wrappers.remove(algId);
+        return wrapper;
+    }
+
     public Set<String> algIds() {
         return Collections.unmodifiableSet(wrappers.keySet());
     }

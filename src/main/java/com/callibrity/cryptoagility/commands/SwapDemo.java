@@ -1,10 +1,11 @@
-package com.callibrity.cryptoagility.demos;
+package com.callibrity.cryptoagility.commands;
 
 import com.callibrity.cryptoagility.envelope.Envelope;
 import com.callibrity.cryptoagility.envelope.WrapperRegistry;
 import com.callibrity.cryptoagility.wrappers.MlKemWrapper;
 import com.callibrity.cryptoagility.wrappers.RsaWrapper;
 
+import java.io.PrintWriter;
 import java.security.GeneralSecurityException;
 
 import static com.callibrity.cryptoagility.envelope.EnvelopeCrypto.decrypt;
@@ -15,32 +16,32 @@ import static java.nio.charset.StandardCharsets.UTF_8;
  * The demo from the talk, entirely in memory: encrypt under RSA, swap the wrap
  * algorithm to ML-KEM, encrypt again, and decrypt both.
  */
-final class SwapDemo {
+public final class SwapDemo {
 
     private SwapDemo() {}
 
-    static void run() throws GeneralSecurityException {
+    public static void run(PrintWriter out) throws GeneralSecurityException {
         var registry = new WrapperRegistry();
 
         // Today's config: classical RSA.
         var rsa = new RsaWrapper();
         registry.register(rsa);
-        System.out.println("config: crypto.wrap = " + rsa.algId());
+        out.println("config: crypto.wrap = " + rsa.algId());
         Envelope v1 = encrypt("customer record #1 (written last year)".getBytes(UTF_8), rsa);
-        System.out.println("  v1 envelope: " + v1.summary());
+        out.println("  v1 envelope: " + v1.summary());
 
         // One-line config change: swap the wrap algorithm to post-quantum.
         var mlkem = new MlKemWrapper();
         registry.register(mlkem);
-        System.out.println("\nconfig: crypto.wrap = " + mlkem.algId() + "   (one line)\n");
+        out.println("\nconfig: crypto.wrap = " + mlkem.algId() + "   (one line)\n");
         Envelope v2 = encrypt("customer record #2 (written today)".getBytes(UTF_8), mlkem);
-        System.out.println("  v2 envelope: " + v2.summary());
+        out.println("  v2 envelope: " + v2.summary());
 
         // Decrypt both. No flag day: each envelope carries its own algorithm.
-        System.out.println("\nDecrypt both, no migration window:");
-        System.out.println("  v1 (" + v1.alg() + ")  -> " + new String(decrypt(v1, registry), UTF_8));
-        System.out.println("  v2 (" + v2.alg() + ")       -> " + new String(decrypt(v2, registry), UTF_8));
+        out.println("\nDecrypt both, no migration window:");
+        out.println("  v1 (" + v1.alg() + ")  -> " + new String(decrypt(v1, registry), UTF_8));
+        out.println("  v2 (" + v2.alg() + ")       -> " + new String(decrypt(v2, registry), UTF_8));
 
-        System.out.println("\nOld data still reads, new data is post-quantum, the code never changed.");
+        out.println("\nOld data still reads, new data is post-quantum, the code never changed.");
     }
 }

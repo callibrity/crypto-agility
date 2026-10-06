@@ -1,4 +1,4 @@
-package com.callibrity.cryptoagility.demos;
+package com.callibrity.cryptoagility.commands;
 
 import com.callibrity.cryptoagility.envelope.Envelope;
 
@@ -12,7 +12,7 @@ import java.util.function.UnaryOperator;
  * sizes. It only looks at what is stored; nothing is decrypted, and no key is
  * needed to see which algorithm was used.
  */
-final class EnvelopeView {
+public final class EnvelopeView {
 
     private static final int GCM_TAG_BYTES = 16;
     private static final int BYTES_PER_BLOCK = 64;

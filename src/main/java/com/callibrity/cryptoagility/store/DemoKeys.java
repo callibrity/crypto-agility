@@ -84,19 +84,8 @@ public final class DemoKeys {
         return files;
     }
 
-    /** Reads a file of named fields that must already exist. */
-    public Map<String, String> read(String fileName) throws IOException {
-        return KeyValueFile.read(dir.resolve(fileName));
-    }
-
-    /** Writes a file of named fields, replacing what was there. */
-    public void write(String fileName, Map<String, String> fields) throws IOException {
-        touched.add(fileName);
-        KeyValueFile.write(dir.resolve(fileName), fields);
-    }
-
     /**
-     * The key files loaded or written since the last call. Calling this after
+     * The key files loaded since the last call. Calling this after
      * building each wrapper tells you which files belong to which algorithm.
      */
     public List<String> takeTouched() {

@@ -1,4 +1,4 @@
-package com.callibrity.cryptoagility.demos;
+package com.callibrity.cryptoagility.commands;
 
 import com.callibrity.cryptoagility.cbom.CycloneDx;
 import com.callibrity.cryptoagility.cbom.CycloneDx.Bom;
@@ -19,6 +19,8 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 import java.io.IOException;
+import java.io.PrintWriter;
+import java.io.Writer;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.security.GeneralSecurityException;
@@ -34,20 +36,24 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 @DisplayNameGeneration(DisplayNameGenerator.ReplaceUnderscores.class)
 class CbomCommandTest {
 
+    // The commands' output is not what these tests check, so it is thrown away.
+    private static final PrintWriter OUT = new PrintWriter(Writer.nullWriter());
+
     @TempDir
     Path dataDir;
 
     private Workspace ws;
-    private Shell shell;
 
     @BeforeEach
-    void write_records_under_two_algorithms() {
+    void write_records_under_two_algorithms() throws GeneralSecurityException, IOException {
         ws = new Workspace(dataDir);
-        shell = new Shell(ws);
-        shell.execute("write customer record #1");
-        shell.execute("write customer record #2");
-        shell.execute("use ML-KEM-768");
-        shell.execute("write customer record #3");
+        write("RSA-OAEP-3072", "customer record #1");
+        write("RSA-OAEP-3072", "customer record #2");
+        write("ML-KEM-768", "customer record #3");
+    }
+
+    private void write(String alg, String text) throws GeneralSecurityException, IOException {
+        StoreCommands.write(OUT, ws, ws.registry().get(alg), text);
     }
 
     private Bom inventory() throws GeneralSecurityException, IOException {
@@ -121,8 +127,7 @@ class CbomCommandTest {
         @Test
         void records_the_provisional_one_as_a_property_and_leaves_the_oid_field_empty()
                 throws GeneralSecurityException, IOException {
-            shell.execute("use HQC-192");
-            shell.execute("write customer record #4");
+            write("HQC-192", "customer record #4");
 
             Component hqc = component(inventory(), "crypto/algorithm/HQC-192");
 
@@ -208,8 +213,8 @@ class CbomCommandTest {
         }
 
         @Test
-        void is_written_into_the_data_directory_by_the_command() {
-            shell.execute("cbom");
+        void is_written_into_the_data_directory_by_the_command() throws GeneralSecurityException, IOException {
+            CbomCommand.run(OUT, ws);
 
             assertTrue(Files.isRegularFile(dataDir.resolve(CbomCommand.FILE_NAME)));
         }
@@ -232,9 +237,8 @@ class CbomCommandTest {
         }
 
         @Test
-        void the_algorithms_command_lists_them_all() {
-            assertTrue(shell.execute("algorithms"));
-            assertTrue(shell.execute("algs"));
+        void the_algorithms_command_lists_them_all() throws GeneralSecurityException, IOException {
+            AlgorithmsCommand.run(OUT, ws, "ML-KEM-768");
         }
 
         @Test
@@ -249,7 +253,8 @@ class CbomCommandTest {
             for (String alg : ws.registry().algIds()) {
                 assertFalse(ws.keyFiles(alg).isEmpty(), alg + " has no key files");
             }
-            assertEquals(List.of("rsa-toy.key", "rsa-toy.pub"), ws.keyFiles("RSA-TOY-96"));
+            assertEquals(List.of("aes-256-kw.key"), ws.keyFiles("AES-256-KW"));
+            assertEquals(List.of("hybrid-x25519.keypair", "hybrid-ml-kem-768.keypair"), ws.keyFiles("X25519+ML-KEM-768"));
         }
     }
 

@@ -9,3 +9,6 @@ out/
 .classpath
 .project
 .settings/
+
+# Working files, such as the slide deck
+Claude outputs/

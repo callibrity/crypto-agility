@@ -1,4 +1,4 @@
-package com.callibrity.cryptoagility.demos;
+package com.callibrity.cryptoagility.commands;
 
 import com.callibrity.cryptoagility.envelope.KeyWrapper;
 import com.callibrity.cryptoagility.envelope.WrapperRegistry;
@@ -10,7 +10,6 @@ import com.callibrity.cryptoagility.wrappers.HqcWrapper;
 import com.callibrity.cryptoagility.wrappers.HybridWrapper;
 import com.callibrity.cryptoagility.wrappers.MlKemWrapper;
 import com.callibrity.cryptoagility.wrappers.RsaWrapper;
-import com.callibrity.cryptoagility.wrappers.ToyRsaWrapper;
 
 import java.io.IOException;
 import java.nio.file.Path;
@@ -23,32 +22,31 @@ import java.util.Map;
  * What the commands share: the envelopes on disk, the keys on disk, and every
  * algorithm that can still be read. Everything lives under one data directory.
  */
-final class Workspace {
-
-    private static final String TOY_RSA_PUBLIC_KEY = "rsa-toy.pub";
+public final class Workspace {
 
     private final Path dataDir;
     private final EnvelopeStore envelopes;
     private final DemoKeys keys;
     private final Map<String, List<String>> keyFiles = new HashMap<>();
     private WrapperRegistry registry;
+    private WrapperRegistry building;
 
-    Workspace(Path dataDir) {
+    public Workspace(Path dataDir) {
         this.dataDir = dataDir;
         this.envelopes = new EnvelopeStore(dataDir.resolve("envelopes"));
         this.keys = new DemoKeys(dataDir.resolve("keys"));
     }
 
-    Path dataDir() {
+    public Path dataDir() {
         return dataDir;
     }
 
     /** The stored envelopes. Looking at them needs no keys. */
-    EnvelopeStore envelopes() {
+    public EnvelopeStore envelopes() {
         return envelopes;
     }
 
-    DemoKeys keys() {
+    public DemoKeys keys() {
         return keys;
     }
 
@@ -60,44 +58,38 @@ final class Workspace {
      * The keys are loaded the first time this is called, and generated if they
      * do not exist yet.
      */
-    WrapperRegistry registry() throws GeneralSecurityException, IOException {
+    public WrapperRegistry registry() throws GeneralSecurityException, IOException {
         if (registry == null) {
-            registry = new WrapperRegistry();
+            building = new WrapperRegistry();
+            keyFiles.clear();
+            keys.takeTouched();                                  // forget anything an earlier failed attempt touched
             register(new RsaWrapper(keys.keyPair("rsa-3072", RsaWrapper::newKeyPair)));
             register(new EcdhWrapper(keys.keyPair("ecdh-x25519", EcdhWrapper::newKeyPair)));
             register(new AesKwWrapper(AesKwWrapper.fromFields(
                     keys.fields("aes-256-kw.key", () -> AesKwWrapper.toFields(AesKwWrapper.newKey())))));
-            register(new MlKemWrapper(keys.keyPair("ml-kem-768", MlKemWrapper::newKeyPair)));
+            for (MlKemWrapper.ParameterSet set : MlKemWrapper.ParameterSet.values()) {
+                register(new MlKemWrapper(set, keys.keyPair(set.algId().toLowerCase(), () -> MlKemWrapper.newKeyPair(set))));
+            }
             register(new HybridWrapper(
                     keys.keyPair("hybrid-x25519", HybridWrapper::newX25519KeyPair),
                     keys.keyPair("hybrid-ml-kem-768", MlKemWrapper::newKeyPair)));
-            register(new HqcWrapper(keys.keyPair("hqc-192", HqcWrapper::newKeyPair)));
-            register(toyRsa());
+            for (HqcWrapper.ParameterSet set : HqcWrapper.ParameterSet.values()) {
+                register(new HqcWrapper(set, keys.keyPair(set.algId().toLowerCase(), () -> HqcWrapper.newKeyPair(set))));
+            }
+            registry = building;                                 // handed out only once every algorithm has loaded
         }
         return registry;
     }
 
     /** The key files that belong to an algorithm, for the inventory. Empty for one that is not registered. */
-    List<String> keyFiles(String algId) throws GeneralSecurityException, IOException {
+    public List<String> keyFiles(String algId) throws GeneralSecurityException, IOException {
         registry();
         return keyFiles.getOrDefault(algId, List.of());
     }
 
     // Remembers which key files the wrapper's constructor just used, so the inventory can link keys to algorithms.
     private void register(KeyWrapper wrapper) {
-        registry.register(wrapper);
+        building.register(wrapper);
         keyFiles.put(wrapper.algId(), keys.takeTouched());
-    }
-
-    // The toy key is published as a separate file, so the crack command can be seen to read only the public half.
-    private ToyRsaWrapper toyRsa() throws IOException {
-        var toyKeys = ToyRsaWrapper.Keys.fromFields(keys.fields("rsa-toy.key", () -> ToyRsaWrapper.newKeys().toFields()));
-        keys.write(TOY_RSA_PUBLIC_KEY, toyKeys.publicKey().toFields());
-        return new ToyRsaWrapper(toyKeys);
-    }
-
-    /** What an attacker has: the toy public key, and nothing else from the keys directory. */
-    ToyRsaWrapper.PublicKey toyRsaPublicKey() throws IOException {
-        return ToyRsaWrapper.PublicKey.fromFields(keys.read(TOY_RSA_PUBLIC_KEY));
     }
 }

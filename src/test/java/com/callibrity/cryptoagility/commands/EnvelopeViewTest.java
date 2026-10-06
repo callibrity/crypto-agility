@@ -1,4 +1,4 @@
-package com.callibrity.cryptoagility.demos;
+package com.callibrity.cryptoagility.commands;
 
 import com.callibrity.cryptoagility.envelope.Envelope;
 import com.callibrity.cryptoagility.envelope.WrappedDek;

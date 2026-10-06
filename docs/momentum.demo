@@ -1,0 +1,38 @@
+# ============================================================
+#  Momentum demo  -  "Crypto you can change"
+#  Run:   rm -rf data && ./demo --script docs/momentum.demo
+#  Lines starting with # are comments and are skipped.
+#  Press a key to run each command; it types itself and runs.
+# ============================================================
+
+# We start on RSA. The prompt bracket always says the current algorithm.
+use
+
+# Write a record. Today it's wrapped with RSA.
+write Patient MRN-4471, dob 1984-02-11, dx hypertension
+read
+
+# Look at the envelope. It names its own algorithm, right in the blob.
+show
+
+# The whole move: change the one config line.
+use ML-KEM-768
+
+# New data is post-quantum now. Old data still reads, no migration window.
+write Patient MRN-4472, dob 1990-07-30, dx asthma
+read
+list
+
+# Bring the old record forward. Only the wrap changes; the data is untouched.
+rewrap
+list
+
+# Policy wants NIST level 5? One word. ML-KEM-1024 is category 5 (~AES-256).
+use ML-KEM-1024
+write Patient MRN-4473, dob 1975-12-02, dx diabetes
+list
+
+# The uncomfortable part: what's actually protecting your data?
+cbom
+
+exit

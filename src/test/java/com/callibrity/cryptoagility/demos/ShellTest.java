@@ -1,5 +1,7 @@
 package com.callibrity.cryptoagility.demos;
 
+import com.callibrity.cryptoagility.commands.StoreCommands;
+import com.callibrity.cryptoagility.commands.Workspace;
 import com.callibrity.cryptoagility.envelope.Envelope;
 import com.callibrity.cryptoagility.store.EnvelopeStore.Stored;
 import org.junit.jupiter.api.BeforeEach;
@@ -10,6 +12,8 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 import java.io.IOException;
+import java.io.PrintWriter;
+import java.io.StringWriter;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.security.GeneralSecurityException;
@@ -30,10 +34,13 @@ class ShellTest {
     private Workspace ws;
     private Shell shell;
 
+    private StringWriter output;
+
     @BeforeEach
     void open_a_fresh_session() {
         ws = new Workspace(dataDir);
-        shell = new Shell(ws);
+        output = new StringWriter();
+        shell = new Shell(ws, new PrintWriter(output));
     }
 
     private List<String> storedAlgorithms() throws IOException {
@@ -129,9 +136,14 @@ class ShellTest {
     class When_completing_what_is_typed {
 
         @Test
-        void offers_every_registered_algorithm() {
-            assertEquals(List.of("RSA-OAEP-3072", "ECDH-X25519", "AES-256-KW", "ML-KEM-768", "X25519+ML-KEM-768", "HQC-192",
-                    "RSA-TOY-96"), shell.algorithms());
+        void offers_every_registered_algorithm() throws GeneralSecurityException, IOException {
+            assertEquals(List.copyOf(ws.registry().algIds()), shell.algorithms());
+        }
+
+        @Test
+        void offers_every_parameter_set_of_ml_kem_and_hqc() {
+            assertTrue(shell.algorithms().containsAll(List.of(
+                    "ML-KEM-512", "ML-KEM-768", "ML-KEM-1024", "HQC-128", "HQC-192", "HQC-256")));
         }
 
         @Test
@@ -154,6 +166,90 @@ class ShellTest {
     }
 
     @Nested
+    class Output {
+
+        @Test
+        void goes_to_the_shell_writer_rather_than_standard_output() {
+            shell.execute("write customer record #1");
+
+            assertTrue(output.toString().contains("saved record-0001"));
+        }
+
+        @Test
+        void includes_errors() {
+            shell.execute("frobnicate");
+
+            assertTrue(output.toString().contains("unknown command frobnicate"));
+        }
+    }
+
+    @Nested
+    class When_an_algorithm_is_retired {
+
+        @Test
+        void records_still_wrapped_with_it_can_no_longer_be_read() {
+            shell.execute("write customer record #1");
+            shell.execute("use ML-KEM-768");
+
+            shell.execute("retire RSA-OAEP-3072");
+            shell.execute("read");
+
+            assertTrue(output.toString().contains("1 record(s) still depend on it"));
+            assertTrue(output.toString().contains("UNREADABLE"));
+        }
+
+        @Test
+        void records_moved_off_it_first_still_read() {
+            shell.execute("write customer record #1");
+            shell.execute("use ML-KEM-768");
+            shell.execute("rewrap");
+
+            shell.execute("retire RSA-OAEP-3072");
+            shell.execute("read");
+
+            assertTrue(output.toString().contains("nothing was lost"));
+            assertTrue(output.toString().contains("record-0001 (ML-KEM-768) -> customer record #1"));
+        }
+
+        @Test
+        void it_is_no_longer_offered() {
+            shell.execute("use ML-KEM-768");
+
+            shell.execute("retire RSA-OAEP-3072");
+
+            assertFalse(shell.algorithms().contains("RSA-OAEP-3072"));
+        }
+
+        @Test
+        void the_algorithm_wrapping_new_data_cannot_be_retired() {
+            shell.execute("retire RSA-OAEP-3072");
+
+            assertTrue(shell.algorithms().contains("RSA-OAEP-3072"));
+            assertTrue(output.toString().contains("is wrapping new data"));
+        }
+
+        @Test
+        void only_lasts_for_the_session() {
+            shell.execute("use ML-KEM-768");
+            shell.execute("retire RSA-OAEP-3072");
+
+            var next = new Shell(new Workspace(dataDir), new PrintWriter(new StringWriter()));
+
+            assertTrue(next.algorithms().contains("RSA-OAEP-3072"));
+        }
+    }
+
+    @Nested
+    class When_listing_algorithms {
+
+        @Test
+        void both_names_for_the_command_work() {
+            assertTrue(shell.execute("algorithms"));
+            assertTrue(shell.execute("algs"));
+        }
+    }
+
+    @Nested
     class When_a_line_is_not_a_command {
 
         @Test
@@ -164,6 +260,12 @@ class ShellTest {
         @Test
         void a_blank_line_keeps_the_session_going() {
             assertTrue(shell.execute("   "));
+        }
+
+        @Test
+        void an_unexpected_error_keeps_the_session_going() {
+            assertTrue(shell.execute("show 99999999999"));
+            assertTrue(output.toString().contains("unexpected error"));
         }
 
         @Test
