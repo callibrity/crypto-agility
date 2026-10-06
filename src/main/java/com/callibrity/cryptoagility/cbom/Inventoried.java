@@ -1,4 +1,4 @@
-package com.callibrity.cryptoagility.envelope;
+package com.callibrity.cryptoagility.cbom;
 
 /**
  * An algorithm that can describe itself for a cryptographic inventory (a CBOM).

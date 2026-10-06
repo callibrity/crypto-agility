@@ -1,6 +1,6 @@
 package com.callibrity.cryptoagility.cipher;
 
-import com.callibrity.cryptoagility.envelope.AlgorithmFacts;
+import com.callibrity.cryptoagility.cbom.AlgorithmFacts;
 
 import javax.crypto.Cipher;
 import javax.crypto.SecretKey;

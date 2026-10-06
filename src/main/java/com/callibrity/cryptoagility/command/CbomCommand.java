@@ -13,7 +13,7 @@ import com.callibrity.cryptoagility.cbom.CycloneDx.Tools;
 import com.callibrity.cryptoagility.cbom.CycloneDx;
 import com.callibrity.cryptoagility.cipher.DataCipher;
 import com.callibrity.cryptoagility.cipher.DataCiphers;
-import com.callibrity.cryptoagility.envelope.AlgorithmFacts;
+import com.callibrity.cryptoagility.cbom.AlgorithmFacts;
 import com.callibrity.cryptoagility.envelope.Envelope;
 import com.callibrity.cryptoagility.envelope.UnknownAlgorithmException;
 import com.callibrity.cryptoagility.kms.AlgorithmInfo;

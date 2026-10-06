@@ -1,7 +1,7 @@
 package com.callibrity.cryptoagility.kms;
 
 import com.callibrity.cryptoagility.cipher.DataKeySpec;
-import com.callibrity.cryptoagility.envelope.Inventoried;
+import com.callibrity.cryptoagility.cbom.Inventoried;
 import com.callibrity.cryptoagility.envelope.UnknownAlgorithmException;
 import com.callibrity.cryptoagility.store.KeyValueFile;
 import com.callibrity.cryptoagility.wrapper.AesKwWrapper;

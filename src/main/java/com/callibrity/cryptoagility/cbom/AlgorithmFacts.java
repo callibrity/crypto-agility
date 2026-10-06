@@ -1,4 +1,4 @@
-package com.callibrity.cryptoagility.envelope;
+package com.callibrity.cryptoagility.cbom;
 
 import java.util.List;
 

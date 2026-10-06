@@ -1,7 +1,7 @@
 package com.callibrity.cryptoagility.wrapper;
 
-import com.callibrity.cryptoagility.envelope.AlgorithmFacts;
-import com.callibrity.cryptoagility.envelope.Inventoried;
+import com.callibrity.cryptoagility.cbom.AlgorithmFacts;
+import com.callibrity.cryptoagility.cbom.Inventoried;
 import org.bouncycastle.asn1.ASN1ObjectIdentifier;
 import org.bouncycastle.asn1.bc.BCObjectIdentifiers;
 import org.bouncycastle.pqc.jcajce.provider.BouncyCastlePQCProvider;

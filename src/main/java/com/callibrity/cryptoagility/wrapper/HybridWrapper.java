@@ -1,7 +1,7 @@
 package com.callibrity.cryptoagility.wrapper;
 
-import com.callibrity.cryptoagility.envelope.AlgorithmFacts;
-import com.callibrity.cryptoagility.envelope.Inventoried;
+import com.callibrity.cryptoagility.cbom.AlgorithmFacts;
+import com.callibrity.cryptoagility.cbom.Inventoried;
 
 import javax.crypto.KDF;
 import javax.crypto.KEM;

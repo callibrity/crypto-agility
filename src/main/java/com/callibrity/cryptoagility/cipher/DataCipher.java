@@ -1,6 +1,6 @@
 package com.callibrity.cryptoagility.cipher;
 
-import com.callibrity.cryptoagility.envelope.Inventoried;
+import com.callibrity.cryptoagility.cbom.Inventoried;
 
 import javax.crypto.SecretKey;
 import java.security.GeneralSecurityException;

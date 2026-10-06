@@ -1,6 +1,6 @@
 package com.callibrity.cryptoagility.wrapper;
 
-import com.callibrity.cryptoagility.envelope.Inventoried;
+import com.callibrity.cryptoagility.cbom.Inventoried;
 import org.junit.jupiter.api.DisplayNameGeneration;
 import org.junit.jupiter.api.DisplayNameGenerator;
 import org.junit.jupiter.api.Nested;
