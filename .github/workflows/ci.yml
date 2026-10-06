@@ -12,8 +12,8 @@ jobs:
   checks:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
-      - uses: actions/setup-java@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-java@v6
         with:
           java-version: '25'
           distribution: 'liberica'
@@ -29,8 +29,8 @@ jobs:
         java: ['25', '27']
     name: build (JDK ${{ matrix.java }})
     steps:
-      - uses: actions/checkout@v5
-      - uses: actions/setup-java@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-java@v6
         with:
           java-version: ${{ matrix.java }}
           distribution: 'liberica'
