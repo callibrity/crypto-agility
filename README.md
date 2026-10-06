@@ -82,7 +82,8 @@ The demo from the talk is also a script you can play back:
 rm -rf data && ./demo --script docs/momentum.demo
 ```
 
-Press a key and the next command types itself and runs, with the same prompt
+In a real terminal, press a key and the next command types itself and runs
+(in an IDE's run window, press Enter instead), with the same prompt
 and the same commands as when you type them. The script's comments explain each
 step. On Windows, use `mvnw -q compile exec:java -Dexec.args="--script docs/momentum.demo"`.
 Set `DEMO_TYPING=0` to skip the typing effect, or `DEMO_CPS` to change its speed.

@@ -53,6 +53,16 @@ class EnvelopeViewTest {
         }
 
         @Test
+        void keeps_its_shape_when_the_algorithm_name_is_long() {
+            var odd = new Envelope("A-VERY-LONG-ALGORITHM-NAME-SOMEONE-TYPED-IN-BY-HAND", new byte[12], new byte[34],
+                    WrappedDek.of("wrappedKey", new byte[4]));
+
+            List<String> lines = EnvelopeView.render("record-0001", odd).lines().toList();
+
+            assertEquals(1, lines.stream().map(String::length).distinct().count());
+        }
+
+        @Test
         void totals_the_bytes_stored() {
             String firstLine = EnvelopeView.render("record-0001", KEM).lines().findFirst().orElseThrow();
 

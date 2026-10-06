@@ -20,6 +20,7 @@ import org.junit.jupiter.api.io.TempDir;
 
 import java.io.IOException;
 import java.io.PrintWriter;
+import java.io.StringWriter;
 import java.io.Writer;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -238,7 +239,14 @@ class CbomCommandTest {
 
         @Test
         void the_algorithms_command_lists_them_all() throws GeneralSecurityException, IOException {
-            AlgorithmsCommand.run(OUT, ws, "ML-KEM-768");
+            var listing = new StringWriter();
+
+            AlgorithmsCommand.run(new PrintWriter(listing), ws, "ML-KEM-768");
+
+            for (String alg : ws.registry().algIds()) {
+                assertTrue(listing.toString().contains(alg), alg);
+            }
+            assertTrue(listing.toString().contains("BCPQC"));
         }
 
         @Test

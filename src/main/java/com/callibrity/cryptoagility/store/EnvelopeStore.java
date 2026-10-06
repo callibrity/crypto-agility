@@ -27,8 +27,20 @@ public final class EnvelopeStore {
     private static final String CIPHERTEXT = "ciphertext";
     private static final Set<String> RESERVED = Set.of(ALG, NONCE, CIPHERTEXT);
 
-    /** An envelope together with the id it is stored under. */
-    public record Stored(String id, Envelope envelope) {}
+    /**
+     * An envelope together with the id it is stored under. A file that can no
+     * longer be parsed has no envelope, only a problem saying what is wrong.
+     */
+    public record Stored(String id, Envelope envelope, String problem) {
+
+        public Stored(String id, Envelope envelope) {
+            this(id, envelope, null);
+        }
+
+        public boolean damaged() {
+            return envelope == null;
+        }
+    }
 
     private final Path dir;
 
@@ -64,10 +76,15 @@ public final class EnvelopeStore {
     }
 
     /** Every stored envelope, oldest first. */
+    // One damaged file is reported as damaged; it does not stop the rest from loading.
     public List<Stored> all() throws IOException {
         List<Stored> stored = new ArrayList<>();
         for (String id : ids()) {
-            stored.add(new Stored(id, load(dir.resolve(id + SUFFIX))));
+            try {
+                stored.add(new Stored(id, load(dir.resolve(id + SUFFIX))));
+            } catch (IOException e) {
+                stored.add(new Stored(id, null, e.getMessage()));
+            }
         }
         return stored;
     }

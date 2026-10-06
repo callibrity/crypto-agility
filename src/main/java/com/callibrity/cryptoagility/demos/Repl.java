@@ -1,5 +1,6 @@
 package com.callibrity.cryptoagility.demos;
 
+import com.callibrity.cryptoagility.commands.Workspace;
 import org.jline.reader.Completer;
 import org.jline.reader.EndOfFileException;
 import org.jline.reader.LineReader;
@@ -14,8 +15,6 @@ import org.jline.terminal.Terminal;
 import org.jline.terminal.TerminalBuilder;
 import org.jline.utils.AttributedStringBuilder;
 import org.jline.utils.AttributedStyle;
-
-import com.callibrity.cryptoagility.commands.Workspace;
 
 import java.io.IOException;
 import java.io.PrintWriter;

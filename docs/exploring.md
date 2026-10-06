@@ -235,9 +235,10 @@ from a classical algorithm (X25519) and one from a post-quantum algorithm
 ML-KEM is new, and it is the approach TLS has taken with X25519MLKEM768.
 
 Notice what it took to add: one class and one registry line. It also stores a
-field no other wrapper has. In the `show` output you will see `ephemeralKey`
-next to `kemCt`. Nothing outside `HybridWrapper` knows that field exists: a
-wrapped key is a set of named byte fields chosen by the wrapper, and the
+combination of fields no other wrapper has. In the `show` output you will see
+both `ephemeralKey`, the one-time X25519 key that `ECDH-X25519` also stores, and
+`kemCt`, the ML-KEM ciphertext. Nothing outside `HybridWrapper` knows it needs
+both: a wrapped key is a set of named byte fields chosen by the wrapper, and the
 envelope, the store and the commands carry them as they come.
 
 `HybridWrapper` is here to show the idea. It is not the X-Wing construction and

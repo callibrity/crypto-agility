@@ -1,7 +1,8 @@
 package com.callibrity.cryptoagility.demos;
 
-import com.callibrity.cryptoagility.commands.Workspace;
 import com.callibrity.cryptoagility.commands.Paint;
+import com.callibrity.cryptoagility.commands.Workspace;
+
 import java.io.Console;
 import java.io.IOException;
 import java.io.PrintWriter;

@@ -7,9 +7,12 @@ import com.callibrity.cryptoagility.envelope.WrappedDek;
 
 import javax.crypto.Cipher;
 import javax.crypto.SecretKey;
+import javax.crypto.spec.OAEPParameterSpec;
+import javax.crypto.spec.PSource;
 import java.security.GeneralSecurityException;
 import java.security.KeyPair;
 import java.security.KeyPairGenerator;
+import java.security.spec.MGF1ParameterSpec;
 
 /** Classical, quantum-vulnerable: RSA-OAEP wraps the data key directly. */
 public final class RsaWrapper implements KeyWrapper, Inventoried {
@@ -17,7 +20,13 @@ public final class RsaWrapper implements KeyWrapper, Inventoried {
     public static final String ALG_ID = "RSA-OAEP-3072";
 
     private static final String WRAPPED_KEY = "wrappedKey";
-    private static final String TRANSFORMATION = "RSA/ECB/OAEPWithSHA-256AndMGF1Padding";
+    private static final String TRANSFORMATION = "RSA/ECB/OAEPPadding";
+
+    // Spelled out, because the JDK's "OAEPWithSHA-256AndMGF1Padding" quietly uses SHA-1 inside MGF1, and other
+    // libraries read that name as SHA-256 throughout. An algorithm name that means different things to different
+    // readers is its own agility problem.
+    private static final OAEPParameterSpec OAEP_SHA256 =
+            new OAEPParameterSpec("SHA-256", "MGF1", MGF1ParameterSpec.SHA256, PSource.PSpecified.DEFAULT);
 
     private final KeyPair kp;
 
@@ -41,14 +50,14 @@ public final class RsaWrapper implements KeyWrapper, Inventoried {
     @Override
     public WrappedDek wrap(SecretKey dek) throws GeneralSecurityException {
         var c = Cipher.getInstance(TRANSFORMATION);
-        c.init(Cipher.WRAP_MODE, kp.getPublic());
+        c.init(Cipher.WRAP_MODE, kp.getPublic(), OAEP_SHA256);
         return WrappedDek.of(WRAPPED_KEY, c.wrap(dek));
     }
 
     @Override
     public SecretKey unwrap(WrappedDek w) throws GeneralSecurityException {
         var c = Cipher.getInstance(TRANSFORMATION);
-        c.init(Cipher.UNWRAP_MODE, kp.getPrivate());
+        c.init(Cipher.UNWRAP_MODE, kp.getPrivate(), OAEP_SHA256);
         return (SecretKey) c.unwrap(w.require(WRAPPED_KEY, ALG_ID), "AES", Cipher.SECRET_KEY);
     }
 

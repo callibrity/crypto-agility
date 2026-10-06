@@ -3,6 +3,8 @@ package com.callibrity.cryptoagility.demos;
 import com.callibrity.cryptoagility.commands.StoreCommands;
 import com.callibrity.cryptoagility.commands.Workspace;
 import com.callibrity.cryptoagility.envelope.Envelope;
+import com.callibrity.cryptoagility.envelope.KeyWrapper;
+import com.callibrity.cryptoagility.envelope.WrappedDek;
 import com.callibrity.cryptoagility.store.EnvelopeStore.Stored;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayNameGeneration;
@@ -11,6 +13,7 @@ import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+import javax.crypto.SecretKey;
 import java.io.IOException;
 import java.io.PrintWriter;
 import java.io.StringWriter;
@@ -166,6 +169,53 @@ class ShellTest {
     }
 
     @Nested
+    class When_a_stored_envelope_is_damaged {
+
+        private void damage(String id, String find, String replace) throws IOException {
+            Path file = dataDir.resolve("envelopes").resolve(id + ".envelope");
+            Files.writeString(file, Files.readString(file).replaceFirst(find, replace));
+        }
+
+        @BeforeEach
+        void write_two_records() {
+            shell.execute("write customer record #1");
+            shell.execute("write customer record #2");
+        }
+
+        @Test
+        void a_file_that_no_longer_parses_is_reported_and_the_rest_still_read() throws IOException {
+            damage("record-0001", "ciphertext=", "ciphertext=!!!");
+
+            shell.execute("read");
+
+            assertTrue(output.toString().contains("record-0001 (damaged) -> UNREADABLE"));
+            assertTrue(output.toString().contains("record-0002 (RSA-OAEP-3072) -> customer record #2"));
+        }
+
+        @Test
+        void every_command_that_reads_the_store_keeps_working() throws IOException {
+            damage("record-0001", "ciphertext=", "ciphertext=!!!");
+
+            for (String command : List.of("list", "show", "cbom", "rewrap", "algorithms")) {
+                shell.execute(command);
+            }
+
+            assertFalse(output.toString().contains("error:"), output.toString());
+            assertTrue(output.toString().contains("damaged"));
+        }
+
+        @Test
+        void an_envelope_that_names_no_algorithm_says_so() throws IOException {
+            damage("record-0001", "alg=RSA-OAEP-3072\n", "");
+
+            shell.execute("read");
+
+            assertTrue(output.toString().contains("record-0001 ((none)) -> UNREADABLE: the envelope names no algorithm"));
+            assertFalse(output.toString().contains("null"));
+        }
+    }
+
+    @Nested
     class Output {
 
         @Test
@@ -244,8 +294,10 @@ class ShellTest {
 
         @Test
         void both_names_for_the_command_work() {
-            assertTrue(shell.execute("algorithms"));
-            assertTrue(shell.execute("algs"));
+            shell.execute("algorithms");
+            shell.execute("algs");
+
+            assertEquals(2, output.toString().split("QUANTUM-SAFE", -1).length - 1);
         }
     }
 
@@ -263,9 +315,18 @@ class ShellTest {
         }
 
         @Test
-        void an_unexpected_error_keeps_the_session_going() {
-            assertTrue(shell.execute("show 99999999999"));
+        void an_unexpected_error_keeps_the_session_going() throws GeneralSecurityException, IOException {
+            ws.registry().register(new ExplodingWrapper());
+            shell.execute("use EXPLODING");
+
+            assertTrue(shell.execute("write customer record #1"));
             assertTrue(output.toString().contains("unexpected error"));
+        }
+
+        @Test
+        void a_record_number_too_large_to_exist_is_just_not_found() {
+            assertTrue(shell.execute("show 99999999999"));
+            assertTrue(output.toString().contains("no record called 99999999999"));
         }
 
         @Test
@@ -300,6 +361,23 @@ class ShellTest {
             List<Stored> selected = StoreCommands.select(ws, copy.toString());
 
             assertEquals("RSA-OAEP-3072", selected.getFirst().envelope().alg());
+        }
+    }
+
+    /** Fails in a way nobody planned for, to prove one bad command cannot end the session. */
+    private static final class ExplodingWrapper implements KeyWrapper {
+
+        @Override
+        public String algId() { return "EXPLODING"; }
+
+        @Override
+        public WrappedDek wrap(SecretKey dek) {
+            throw new IllegalStateException("boom");
+        }
+
+        @Override
+        public SecretKey unwrap(WrappedDek w) {
+            throw new IllegalStateException("boom");
         }
     }
 }

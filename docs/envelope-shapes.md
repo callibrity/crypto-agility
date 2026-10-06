@@ -45,11 +45,11 @@ The blunt version: **you cannot yet wrap a data key with ML-KEM through a GA man
 
 **Standards:**
 - **CMS:** RFC 9629 (KEMRecipientInfo, 2024) + RFC 9936 (ML-KEM in CMS, Mar 2026), both published. The one envelope standard that's already PQC-complete.
-- **X.509:** ML-DSA in certificates is RFC 9881 (Oct 2025, published); ML-KEM in certificates is still a draft.
+- **X.509:** ML-DSA in certificates is RFC 9881 (Oct 2025) and ML-KEM in certificates is RFC 9935 (Mar 2026), both published.
 - **JOSE/COSE:** ML-KEM and ML-DSA are still IETF drafts.
-- **TLS:** X25519MLKEM768 is still a draft, even though it's deployed across browsers, CDNs, and JDK 27.
+- **TLS:** X25519MLKEM768 and the other hybrid key exchanges are RFC 10024 (2026), and deployed across browsers, CDNs, and JDK 27.
 - **NIST:** FIPS 203/204/205 finalized Aug 2024. FIPS 206 (FN-DSA) still draft. HQC selected, draft FIPS in progress.
 
 **The short version:** today your TLS connection to the KMS can already be quantum-safe, and PQ signatures are GA, but wrapping your data keys with ML-KEM through a managed KMS is Preview at best. The libraries have the primitives; the managed tooling doesn't. That's the argument in one breath: the teams who win are the ones whose wrapping is behind a seam, so they flip it on the day their KMS ships it, instead of re-architecting.
 
-*These statuses move quickly. Worth re-checking before you rely on them: GCP KMS ML-KEM (Preview → GA?), Tink KEM API, NIST FIPS 206, the TLS hybrid draft, and the Azure/Vault items (unverified here).*
+*These statuses move quickly. Worth re-checking before you rely on them: GCP KMS ML-KEM (Preview → GA?), Tink KEM API, NIST FIPS 206, the JOSE/COSE drafts, and the Azure/Vault items (unverified here).*

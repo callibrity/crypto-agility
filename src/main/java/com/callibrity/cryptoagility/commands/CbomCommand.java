@@ -73,6 +73,10 @@ public final class CbomCommand {
             }
         }
         out.println();
+        long damaged = all.stream().filter(Stored::damaged).count();
+        if (damaged > 0) {
+            out.println("  " + Paint.red(damaged + " damaged record(s) could not be parsed, so what protects them is unknown"));
+        }
         if (all.isEmpty()) {
             out.println("  nothing stored yet, try: write hello");
         } else if (vulnerable == 0) {
@@ -125,6 +129,9 @@ public final class CbomCommand {
     static Map<String, List<String>> recordsByAlgorithm(List<Stored> all) {
         Map<String, List<String>> recordsByAlg = new LinkedHashMap<>();
         for (Stored stored : all) {
+            if (stored.damaged()) {
+                continue;                                      // a file that cannot be parsed has no algorithm to count
+            }
             String alg = stored.envelope().alg() == null ? "unknown" : stored.envelope().alg();
             recordsByAlg.computeIfAbsent(alg, name -> new ArrayList<>()).add(stored.id());
         }

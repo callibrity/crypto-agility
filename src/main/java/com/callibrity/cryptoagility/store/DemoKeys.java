@@ -77,7 +77,10 @@ public final class DemoKeys {
         if (Files.isDirectory(dir)) {
             try (Stream<Path> paths = Files.list(dir)) {
                 for (Path file : paths.toList()) {
-                    files.put(file.getFileName().toString(), KeyValueFile.read(file));
+                    String name = file.getFileName().toString();
+                    if (name.endsWith(".keypair") || name.endsWith(".key")) {    // skip strays such as .DS_Store
+                        files.put(name, KeyValueFile.read(file));
+                    }
                 }
             }
         }

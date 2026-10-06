@@ -93,6 +93,9 @@ final class ScriptedRepl {
         Attributes saved = terminal.enterRawMode();
         try {
             NonBlockingReader reader = terminal.reader();
+            while (reader.peek(1L) >= 0) {                    // discard keys pressed while the last command ran,
+                reader.read();                                // so a stray press cannot skip the next step
+            }
             int ch = reader.read();                           // first byte of the keypress
             if (ch < 0 || ch == 3 || ch == 4) {
                 return false;                                 // EOF, Ctrl-C, Ctrl-D

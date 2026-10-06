@@ -19,7 +19,8 @@ import java.util.Map;
  *
  * FIPS 203 defines three parameter sets. They differ only in strength and size,
  * so one class covers all three and the parameter set picks the strength. The
- * default is ML-KEM-768, which is what NIST recommends for general use.
+ * default is ML-KEM-768, the common middle choice; CNSA 2.0 requires ML-KEM-1024
+ * for US national security systems.
  */
 public final class MlKemWrapper implements KeyWrapper, Inventoried {
 

@@ -29,6 +29,8 @@ import static java.nio.charset.StandardCharsets.UTF_8;
  */
 public final class StoreCommands {
 
+    private static final String DAMAGED = "damaged";
+
     private StoreCommands() {}
 
     /** Encrypts the text with the given wrapper and saves the envelope. */
@@ -42,9 +44,14 @@ public final class StoreCommands {
     public static void read(PrintWriter out, Workspace ws) throws GeneralSecurityException, IOException {
         Map<String, Integer> inUse = new TreeMap<>();
         for (Stored stored : ws.envelopes().all()) {
+            if (stored.damaged()) {
+                inUse.merge(DAMAGED, 1, Integer::sum);
+                out.printf("  %s (%s) -> %s%n", stored.id(), DAMAGED, Paint.red("UNREADABLE: " + stored.problem()));
+                continue;
+            }
             Envelope env = stored.envelope();
-            inUse.merge(String.valueOf(env.alg()), 1, Integer::sum);
-            out.printf("  %s (%s) -> %s%n", stored.id(), env.alg(), plaintextOrFailure(env, ws));
+            inUse.merge(algOrNone(env), 1, Integer::sum);
+            out.printf("  %s (%s) -> %s%n", stored.id(), algOrNone(env), plaintextOrFailure(env, ws));
         }
         out.println(inUse.isEmpty() ? "  nothing stored yet, try: write hello" : "\n  algorithms in use: " + inUse);
     }
@@ -55,6 +62,11 @@ public final class StoreCommands {
         int skipped = 0;
         long dataBytes = 0;
         for (Stored stored : ws.envelopes().all()) {
+            if (stored.damaged()) {
+                out.println(Paint.red(String.format("  %s SKIPPED, damaged: %s", stored.id(), stored.problem())));
+                skipped++;
+                continue;
+            }
             Envelope before = stored.envelope();
             if (target.algId().equals(before.alg())) {
                 out.printf("  %s already %s%n", stored.id(), before.alg());
@@ -85,10 +97,14 @@ public final class StoreCommands {
         List<Stored> all = ws.envelopes().all();
         out.println(Paint.bold(String.format("  %-12s %-18s %5s %5s  %s", "ID", "ALGORITHM", "WRAP", "DATA", "WRAP FIELDS")));
         for (Stored stored : all) {
+            if (stored.damaged()) {
+                out.printf("  %-12s %s%n", stored.id(), Paint.red(DAMAGED + ": " + stored.problem()));
+                continue;
+            }
             Envelope env = stored.envelope();
             Map<String, byte[]> wrap = env.wrappedDek().fields();
             int wrapBytes = wrap.values().stream().mapToInt(value -> value.length).sum();
-            out.printf("  %-12s %-18s %5d %5d  %s%n", stored.id(), env.alg() == null ? "(none)" : env.alg(),
+            out.printf("  %-12s %-18s %5d %5d  %s%n", stored.id(), algOrNone(env),
                     wrapBytes, env.ciphertext().length, String.join(", ", wrap.keySet()));
         }
         out.printf("%n  %d envelope(s), sizes in bytes, nothing was decrypted to list them%n", all.size());
@@ -101,7 +117,9 @@ public final class StoreCommands {
             out.println("  nothing stored yet, try: write hello");
         }
         out.print(chosen.stream()
-                .map(stored -> EnvelopeView.render(stored.id(), stored.envelope()))
+                .map(stored -> stored.damaged()
+                        ? Paint.red("  " + stored.id() + " is " + DAMAGED + ": " + stored.problem()) + "\n"
+                        : EnvelopeView.render(stored.id(), stored.envelope()))
                 .collect(Collectors.joining("\n")));
     }
 
@@ -129,7 +147,7 @@ public final class StoreCommands {
         if (Files.isRegularFile(Path.of(record))) {
             return List.of(new Stored(record, EnvelopeStore.load(Path.of(record))));
         }
-        String id = record.matches("\\d+") ? String.format("record-%04d", Integer.parseInt(record)) : record;
+        String id = record.matches("\\d{1,9}") ? String.format("record-%04d", Integer.parseInt(record)) : record;
         List<Stored> chosen = ws.envelopes().all().stream().filter(stored -> stored.id().equals(id)).toList();
         if (chosen.isEmpty()) {
             throw new UsageException("no record called " + record + ", try list to see what is stored");
@@ -150,7 +168,14 @@ public final class StoreCommands {
                 Base64.getDecoder().decode(fields.get("private")).length);
     }
 
+    private static String algOrNone(Envelope env) {
+        return env.alg() == null ? "(none)" : env.alg();
+    }
+
     private static String plaintextOrFailure(Envelope env, Workspace ws) {
+        if (env.alg() == null) {
+            return Paint.red("UNREADABLE: the envelope names no algorithm, so nothing says how to open its key");
+        }
         try {
             return new String(decrypt(env, ws.registry()), UTF_8);
         } catch (GeneralSecurityException | IOException e) {

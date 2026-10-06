@@ -29,9 +29,10 @@ import static java.nio.charset.StandardCharsets.UTF_8;
  * break both algorithms to recover it. This is the hedge to reach for while
  * ML-KEM is still young.
  *
- * It is also the "one more class" example: this file and one registry line are
- * all it took to add a third algorithm. It stores a field no other wrapper
- * has (ephemeralKey), and nothing outside this class had to learn about it.
+ * It is also a "one more class" example: this file and one registry line are
+ * all it took to add it. It stores both an ephemeral X25519 key and an ML-KEM
+ * ciphertext, a combination no other wrapper has, and nothing outside this
+ * class had to learn about it.
  *
  * Illustrative only. It shows the shape of a hybrid, but it is NOT the X-Wing
  * construction and has had no review. In production, use a vetted hybrid KEM.

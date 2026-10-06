@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Shorthand for ./mvnw -q compile exec:java. Needs JDK 25+.
 #   ./demo            start the interactive prompt
-#   ./demo swap       run one command and exit
+#   ./demo cbom       run one command and exit
 set -euo pipefail
 cd "$(dirname "$0")"
 if [ $# -eq 0 ]; then

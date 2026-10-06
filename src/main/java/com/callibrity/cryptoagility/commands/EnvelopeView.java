@@ -21,12 +21,13 @@ public final class EnvelopeView {
     private static final String PARTIAL_BLOCKS = " ▏▎▍▌▋▊▉";
     private static final String ALG_NOTE = "in the clear, no key needed";
     private static final String ARROW = "▼ yields the AES-256 data key";
+    private static final int MAX_ALG_WIDTH = 24;
 
     private EnvelopeView() {}
 
     static String render(String id, Envelope env) {
         Map<String, byte[]> wrap = env.wrappedDek().fields();
-        String alg = env.alg() == null ? "(none)" : env.alg();
+        String alg = env.alg() == null ? "(none)" : fit(env.alg(), MAX_ALG_WIDTH);
 
         int nameWidth = wrap.keySet().stream().mapToInt(String::length).max().orElse(0);
         nameWidth = Math.max(nameWidth, "ciphertext".length() + 2);
@@ -107,5 +108,10 @@ public final class EnvelopeView {
     /** A line of the envelope's interior, padded to the envelope's width and closed with its border. */
     private static String envelopeLine(String content, int width, UnaryOperator<String> colour) {
         return "│ " + colour.apply(content) + " ".repeat(width - 3 - content.length()) + "│\n";
+    }
+
+    // A hand-edited algorithm name can be any length; shorten it rather than break the box.
+    private static String fit(String text, int width) {
+        return text.length() <= width ? text : text.substring(0, width - 1) + "…";
     }
 }
