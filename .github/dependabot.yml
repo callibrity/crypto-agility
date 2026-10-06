@@ -1,0 +1,20 @@
+version: 2
+updates:
+  # Dependencies and plugins in pom.xml, including the versions held in properties.
+  - package-ecosystem: maven
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      maven:
+        patterns: ['*']
+        update-types: [minor, patch]
+
+  # The actions used by the CI workflow.
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      actions:
+        patterns: ['*']
