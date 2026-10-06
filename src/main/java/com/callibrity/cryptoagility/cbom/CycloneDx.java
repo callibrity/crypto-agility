@@ -123,10 +123,11 @@ public final class CycloneDx {
 
     /** A key, and the algorithm it belongs to. */
     @JsonInclude(JsonInclude.Include.NON_NULL)
-    public record RelatedCryptoMaterialProperties(KeyType type, String algorithmRef, String state) {}
+    public record RelatedCryptoMaterialProperties(KeyType type, String id, String algorithmRef, String state,
+                                                  String creationDate) {}
 
     public enum KeyType {
-        PUBLIC_KEY("public-key"), PRIVATE_KEY("private-key"), SECRET_KEY("secret-key");
+        KEY("key"), PUBLIC_KEY("public-key"), PRIVATE_KEY("private-key"), SECRET_KEY("secret-key");
 
         private final String json;
 

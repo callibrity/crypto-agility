@@ -1,7 +1,7 @@
 package com.callibrity.cryptoagility.store;
 
 import com.callibrity.cryptoagility.envelope.Envelope;
-import com.callibrity.cryptoagility.envelope.WrappedDek;
+import com.callibrity.cryptoagility.wrapper.WrappedDek;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -23,9 +23,11 @@ public final class EnvelopeStore {
 
     private static final String SUFFIX = ".envelope";
     private static final String ALG = "alg";
+    private static final String KID = "kid";
+    private static final String ENC = "enc";
     private static final String NONCE = "nonce";
     private static final String CIPHERTEXT = "ciphertext";
-    private static final Set<String> RESERVED = Set.of(ALG, NONCE, CIPHERTEXT);
+    private static final Set<String> RESERVED = Set.of(ALG, KID, ENC, NONCE, CIPHERTEXT);
 
     /**
      * An envelope together with the id it is stored under. A file that can no
@@ -63,6 +65,9 @@ public final class EnvelopeStore {
     public void put(String id, Envelope envelope) throws IOException {
         Map<String, String> fields = new LinkedHashMap<>();
         fields.put(ALG, envelope.alg());
+        fields.put(KID, envelope.kid());
+        fields.put(ENC, envelope.enc());
+        fields.values().removeIf(value -> value == null);
         fields.put(NONCE, KeyValueFile.encode(envelope.nonce()));
         fields.put(CIPHERTEXT, KeyValueFile.encode(envelope.ciphertext()));
         // Whatever the wrapper produced is stored as it comes. The store never needs to know the names.
@@ -117,6 +122,8 @@ public final class EnvelopeStore {
         }
         return new Envelope(
                 fields.get(ALG),
+                fields.get(KID),
+                fields.get(ENC),
                 KeyValueFile.decode(file, NONCE, fields.get(NONCE)),
                 KeyValueFile.decode(file, CIPHERTEXT, fields.get(CIPHERTEXT)),
                 new WrappedDek(wrapFields));

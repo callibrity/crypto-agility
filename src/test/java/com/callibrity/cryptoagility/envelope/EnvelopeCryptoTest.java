@@ -1,22 +1,25 @@
 package com.callibrity.cryptoagility.envelope;
 
-import com.callibrity.cryptoagility.wrappers.AesKwWrapper;
-import com.callibrity.cryptoagility.wrappers.EcdhWrapper;
-import com.callibrity.cryptoagility.wrappers.HqcWrapper;
-import com.callibrity.cryptoagility.wrappers.HybridWrapper;
-import com.callibrity.cryptoagility.wrappers.MlKemWrapper;
-import com.callibrity.cryptoagility.wrappers.RsaWrapper;
-import org.junit.jupiter.api.BeforeAll;
+import com.callibrity.cryptoagility.cipher.AesGcm;
+import com.callibrity.cryptoagility.cipher.ChaCha20Poly1305;
+import com.callibrity.cryptoagility.cipher.DataCipher;
+import com.callibrity.cryptoagility.cipher.DataCiphers;
+import com.callibrity.cryptoagility.kms.KeyDisabledException;
+import com.callibrity.cryptoagility.kms.LocalKms;
+import com.callibrity.cryptoagility.wrapper.MlKemWrapper;
+import com.callibrity.cryptoagility.wrapper.RsaWrapper;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayNameGeneration;
 import org.junit.jupiter.api.DisplayNameGenerator;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.MethodSource;
+import org.junit.jupiter.api.io.TempDir;
 
 import javax.crypto.AEADBadTagException;
+import java.io.IOException;
+import java.nio.file.Path;
 import java.security.GeneralSecurityException;
-import java.util.List;
+import java.security.InvalidKeyException;
 
 import static com.callibrity.cryptoagility.envelope.EnvelopeCrypto.decrypt;
 import static com.callibrity.cryptoagility.envelope.EnvelopeCrypto.encrypt;
@@ -32,116 +35,61 @@ class EnvelopeCryptoTest {
 
     private static final byte[] PLAINTEXT = "customer record #1".getBytes(UTF_8);
 
-    private static KeyWrapper rsa;
-    private static KeyWrapper mlKem;
-    private static KeyWrapper hybrid;
-    private static KeyWrapper hqc;
-    private static KeyWrapper ecdh;
-    private static KeyWrapper aesKw;
-    private static WrapperRegistry registry;
+    @TempDir
+    Path dir;
 
-    @BeforeAll
-    static void create_wrappers() throws GeneralSecurityException {
-        rsa = new RsaWrapper();
-        mlKem = new MlKemWrapper();
-        hybrid = new HybridWrapper();
-        hqc = new HqcWrapper();
-        ecdh = new EcdhWrapper();
-        aesKw = new AesKwWrapper();
-        registry = new WrapperRegistry()
-                .register(rsa).register(mlKem).register(hybrid).register(hqc).register(ecdh).register(aesKw);
-    }
+    private LocalKms kms;
+    private String rsaKey;
+    private String mlKemKey;
 
-    static List<KeyWrapper> wrappers() {
-        return List.of(rsa, mlKem, hybrid, hqc, ecdh, aesKw);
+    @BeforeEach
+    void create_two_keys() throws GeneralSecurityException, IOException {
+        kms = LocalKms.withStandardAlgorithms(dir);
+        rsaKey = kms.createKey(RsaWrapper.ALG_ID).keyId();
+        mlKemKey = kms.createKey(MlKemWrapper.ParameterSet.ML_KEM_768.algId()).keyId();
     }
 
     @Nested
-    class With_any_wrapper {
+    class When_encrypting {
 
-        @ParameterizedTest
-        @MethodSource("com.callibrity.cryptoagility.envelope.EnvelopeCryptoTest#wrappers")
-        void decrypts_what_it_encrypted(KeyWrapper wrapper) throws GeneralSecurityException {
-            Envelope env = encrypt(PLAINTEXT, wrapper);
+        @Test
+        void the_envelope_names_the_wrap_algorithm_the_key_and_the_data_cipher() throws GeneralSecurityException, IOException {
+            Envelope env = encrypt(PLAINTEXT, kms, mlKemKey, AesGcm.INSTANCE);
 
-            assertArrayEquals(PLAINTEXT, decrypt(env, registry));
+            assertEquals("ML-KEM-768", env.alg());
+            assertEquals(mlKemKey, env.kid());
+            assertEquals("AES-256-GCM", env.enc());
         }
 
-        @ParameterizedTest
-        @MethodSource("com.callibrity.cryptoagility.envelope.EnvelopeCryptoTest#wrappers")
-        void records_the_wrapping_algorithm_in_the_envelope(KeyWrapper wrapper) throws GeneralSecurityException {
-            Envelope env = encrypt(PLAINTEXT, wrapper);
+        @Test
+        void either_data_cipher_round_trips() throws GeneralSecurityException, IOException {
+            for (DataCipher cipher : DataCiphers.all()) {
+                Envelope env = encrypt(PLAINTEXT, kms, rsaKey, cipher);
 
-            assertEquals(wrapper.algId(), env.alg());
+                assertEquals(cipher.algId(), env.enc());
+                assertArrayEquals(PLAINTEXT, decrypt(env, kms));
+            }
         }
 
-        @ParameterizedTest
-        @MethodSource("com.callibrity.cryptoagility.envelope.EnvelopeCryptoTest#wrappers")
-        void rejects_tampered_ciphertext(KeyWrapper wrapper) throws GeneralSecurityException {
-            Envelope env = encrypt(PLAINTEXT, wrapper);
+        @Test
+        void tampered_ciphertext_is_rejected() throws GeneralSecurityException, IOException {
+            Envelope env = encrypt(PLAINTEXT, kms, rsaKey, AesGcm.INSTANCE);
             env.ciphertext()[0] ^= 1;
 
-            assertThrows(AEADBadTagException.class, () -> decrypt(env, registry));
+            assertThrows(AEADBadTagException.class, () -> decrypt(env, kms));
         }
     }
 
     @Nested
-    class When_the_algorithm_is_swapped {
+    class When_the_algorithm_changes {
 
         @Test
-        void reads_old_and_new_envelopes_side_by_side() throws GeneralSecurityException {
-            Envelope old = encrypt("written last year".getBytes(UTF_8), rsa);
-            Envelope current = encrypt("written today".getBytes(UTF_8), mlKem);
+        void old_and_new_envelopes_read_side_by_side() throws GeneralSecurityException, IOException {
+            Envelope old = encrypt("written last year".getBytes(UTF_8), kms, rsaKey, AesGcm.INSTANCE);
+            Envelope current = encrypt("written today".getBytes(UTF_8), kms, mlKemKey, ChaCha20Poly1305.INSTANCE);
 
-            assertEquals("written last year", new String(decrypt(old, registry), UTF_8));
-            assertEquals("written today", new String(decrypt(current, registry), UTF_8));
-        }
-
-        @Test
-        void each_algorithm_stores_its_own_fields_for_the_wrapped_key() throws GeneralSecurityException {
-            assertEquals(List.of("wrappedKey"), fieldsOf(encrypt(PLAINTEXT, rsa)));
-            assertEquals(List.of("wrappedKey", "kemCt", "wrapNonce"), fieldsOf(encrypt(PLAINTEXT, mlKem)));
-            assertEquals(List.of("wrappedKey", "ephemeralKey", "kemCt", "wrapNonce"), fieldsOf(encrypt(PLAINTEXT, hybrid)));
-            assertEquals(List.of("wrappedKey", "kemCt", "wrapNonce"), fieldsOf(encrypt(PLAINTEXT, hqc)));
-            assertEquals(List.of("wrappedKey", "ephemeralKey", "wrapNonce"), fieldsOf(encrypt(PLAINTEXT, ecdh)));
-            assertEquals(List.of("wrappedKey"), fieldsOf(encrypt(PLAINTEXT, aesKw)));
-        }
-
-        private List<String> fieldsOf(Envelope env) {
-            return List.copyOf(env.wrappedDek().fields().keySet());
-        }
-    }
-
-    @Nested
-    class When_the_algorithm_is_not_registered {
-
-        @Test
-        void fails_naming_the_missing_algorithm() throws GeneralSecurityException {
-            Envelope env = encrypt(PLAINTEXT, rsa);
-            var rsaRetired = new WrapperRegistry().register(mlKem);
-
-            var e = assertThrows(UnknownAlgorithmException.class, () -> decrypt(env, rsaRetired));
-
-            assertTrue(e.getMessage().contains("RSA-OAEP-3072"));
-        }
-    }
-
-    @Nested
-    class When_the_wrong_wrapper_is_assumed {
-
-        @Test
-        void a_kem_wrapper_refuses_a_key_that_rsa_wrapped() throws GeneralSecurityException {
-            Envelope env = encrypt(PLAINTEXT, rsa);
-
-            assertThrows(GeneralSecurityException.class, () -> mlKem.unwrap(env.wrappedDek()));
-            assertThrows(GeneralSecurityException.class, () -> hybrid.unwrap(env.wrappedDek()));
-        }
-
-        @Test
-        void rsa_refuses_a_key_that_a_kem_wrapped() throws GeneralSecurityException {
-            Envelope env = encrypt(PLAINTEXT, mlKem);
-
-            assertThrows(GeneralSecurityException.class, () -> rsa.unwrap(env.wrappedDek()));
+            assertEquals("written last year", new String(decrypt(old, kms), UTF_8));
+            assertEquals("written today", new String(decrypt(current, kms), UTF_8));
         }
     }
 
@@ -149,28 +97,72 @@ class EnvelopeCryptoTest {
     class When_rewrapping {
 
         @Test
-        void leaves_the_nonce_and_ciphertext_untouched() throws GeneralSecurityException {
-            Envelope before = encrypt(PLAINTEXT, rsa);
+        void the_nonce_ciphertext_and_data_cipher_are_untouched() throws GeneralSecurityException, IOException {
+            Envelope before = encrypt(PLAINTEXT, kms, rsaKey, ChaCha20Poly1305.INSTANCE);
 
-            Envelope after = rewrap(before, registry, mlKem);
+            Envelope after = rewrap(before, kms, mlKemKey);
 
             assertArrayEquals(before.nonce(), after.nonce());
             assertArrayEquals(before.ciphertext(), after.ciphertext());
+            assertEquals(before.enc(), after.enc());
         }
 
         @Test
-        void names_the_new_algorithm() throws GeneralSecurityException {
-            Envelope after = rewrap(encrypt(PLAINTEXT, rsa), registry, mlKem);
+        void the_envelope_names_the_new_key_and_algorithm() throws GeneralSecurityException, IOException {
+            Envelope after = rewrap(encrypt(PLAINTEXT, kms, rsaKey, AesGcm.INSTANCE), kms, mlKemKey);
 
             assertEquals("ML-KEM-768", after.alg());
+            assertEquals(mlKemKey, after.kid());
         }
 
         @Test
-        void stays_readable_after_the_old_algorithm_is_retired() throws GeneralSecurityException {
-            Envelope after = rewrap(encrypt(PLAINTEXT, rsa), registry, mlKem);
-            var rsaRetired = new WrapperRegistry().register(mlKem);
+        void it_still_reads_after_the_old_key_is_disabled() throws GeneralSecurityException, IOException {
+            Envelope after = rewrap(encrypt(PLAINTEXT, kms, rsaKey, AesGcm.INSTANCE), kms, mlKemKey);
 
-            assertArrayEquals(PLAINTEXT, decrypt(after, rsaRetired));
+            kms.disableKey(rsaKey);
+
+            assertArrayEquals(PLAINTEXT, decrypt(after, kms));
+        }
+    }
+
+    @Nested
+    class When_something_is_wrong {
+
+        @Test
+        void a_disabled_key_cannot_open_its_envelopes() throws GeneralSecurityException, IOException {
+            Envelope env = encrypt(PLAINTEXT, kms, rsaKey, AesGcm.INSTANCE);
+
+            kms.disableKey(rsaKey);
+
+            assertThrows(KeyDisabledException.class, () -> decrypt(env, kms));
+        }
+
+        @Test
+        void an_alg_that_does_not_match_the_key_is_caught() throws GeneralSecurityException, IOException {
+            Envelope env = encrypt(PLAINTEXT, kms, rsaKey, AesGcm.INSTANCE);
+            var forged = new Envelope("ML-KEM-768", env.kid(), env.enc(), env.nonce(), env.ciphertext(), env.wrappedDek());
+
+            var e = assertThrows(InvalidKeyException.class, () -> decrypt(forged, kms));
+
+            assertTrue(e.getMessage().contains("is RSA-OAEP-3072"));
+        }
+
+        @Test
+        void an_envelope_with_no_key_id_cannot_be_opened() throws GeneralSecurityException, IOException {
+            Envelope env = encrypt(PLAINTEXT, kms, rsaKey, AesGcm.INSTANCE);
+            var anonymous = new Envelope(env.alg(), null, env.enc(), env.nonce(), env.ciphertext(), env.wrappedDek());
+
+            assertThrows(InvalidKeyException.class, () -> decrypt(anonymous, kms));
+        }
+
+        @Test
+        void an_unknown_data_cipher_is_named() throws GeneralSecurityException, IOException {
+            Envelope env = encrypt(PLAINTEXT, kms, rsaKey, AesGcm.INSTANCE);
+            var odd = new Envelope(env.alg(), env.kid(), "ROT13", env.nonce(), env.ciphertext(), env.wrappedDek());
+
+            var e = assertThrows(UnknownAlgorithmException.class, () -> decrypt(odd, kms));
+
+            assertTrue(e.getMessage().contains("ROT13"));
         }
     }
 }

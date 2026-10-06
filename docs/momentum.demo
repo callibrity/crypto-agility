@@ -15,7 +15,7 @@ read
 # Look at the envelope. It names its own algorithm, right in the blob.
 show
 
-# The whole move: change the one config line.
+# The whole move: change the one setting. In a real system it's a config value.
 use ML-KEM-768
 
 # New data is post-quantum now. Old data still reads, no migration window.

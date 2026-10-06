@@ -1,8 +1,8 @@
 package com.callibrity.cryptoagility.store;
 
 import com.callibrity.cryptoagility.envelope.Envelope;
-import com.callibrity.cryptoagility.envelope.WrappedDek;
 import com.callibrity.cryptoagility.store.EnvelopeStore.Stored;
+import com.callibrity.cryptoagility.wrapper.WrappedDek;
 import org.junit.jupiter.api.DisplayNameGeneration;
 import org.junit.jupiter.api.DisplayNameGenerator;
 import org.junit.jupiter.api.Nested;
@@ -20,6 +20,7 @@ import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -27,9 +28,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class EnvelopeStoreTest {
 
     private static final Envelope DIRECT =
-            new Envelope("RSA-OAEP-3072", bytes(12, 1), bytes(40, 2), WrappedDek.of("wrappedKey", bytes(384, 3)));
+            new Envelope("RSA-OAEP-3072", "key-000001", "AES-256-GCM", bytes(12, 1), bytes(40, 2), WrappedDek.of("wrappedKey", bytes(384, 3)));
     private static final Envelope KEM =
-            new Envelope("ML-KEM-768", bytes(12, 4), bytes(40, 5), new WrappedDek(kemFields()));
+            new Envelope("ML-KEM-768", "key-000001", "AES-256-GCM", bytes(12, 4), bytes(40, 5), new WrappedDek(kemFields()));
 
     @TempDir
     Path dir;
@@ -93,7 +94,7 @@ class EnvelopeStoreTest {
         @Test
         void stores_a_field_it_has_never_heard_of() throws IOException {
             var store = new EnvelopeStore(dir);
-            var novel = new Envelope("SOMETHING-NEW", bytes(12, 1), bytes(40, 2), WrappedDek.of("keyVersion", bytes(4, 9)));
+            var novel = new Envelope("SOMETHING-NEW", "key-000001", "AES-256-GCM", bytes(12, 1), bytes(40, 2), WrappedDek.of("keyVersion", bytes(4, 9)));
 
             store.add(novel);
 
@@ -103,7 +104,7 @@ class EnvelopeStoreTest {
         @Test
         void refuses_a_wrap_field_that_would_shadow_the_envelope_header() {
             var store = new EnvelopeStore(dir);
-            var clashing = new Envelope("SOMETHING-NEW", bytes(12, 1), bytes(40, 2), WrappedDek.of("alg", bytes(4, 9)));
+            var clashing = new Envelope("SOMETHING-NEW", "key-000001", "AES-256-GCM", bytes(12, 1), bytes(40, 2), WrappedDek.of("alg", bytes(4, 9)));
 
             assertThrows(IllegalArgumentException.class, () -> store.add(clashing));
         }
@@ -115,6 +116,17 @@ class EnvelopeStoreTest {
             store.add(DIRECT);
 
             assertEquals(Set.of("wrappedKey"), store.all().getFirst().envelope().wrappedDek().fields().keySet());
+        }
+
+        @Test
+        void keeps_the_key_id_and_data_cipher() throws IOException {
+            var store = new EnvelopeStore(dir);
+
+            store.add(KEM);
+
+            Envelope loaded = store.all().getFirst().envelope();
+            assertEquals("key-000001", loaded.kid());
+            assertEquals("AES-256-GCM", loaded.enc());
         }
 
         @Test
@@ -154,4 +166,44 @@ class EnvelopeStoreTest {
             assertEquals("ML-KEM-768", all.getFirst().envelope().alg());
         }
     }
+
+    @Nested
+    class Reading_a_hand_edited_file {
+
+        @Test
+        void skips_comments_blank_lines_and_lines_without_a_value() throws IOException {
+            var store = new EnvelopeStore(dir);
+            String id = store.add(KEM);
+            Path file = dir.resolve(id + ".envelope");
+            Files.writeString(file, "# a note\n\nnot a field\n" + Files.readString(file));
+
+            assertEquals("ML-KEM-768", store.all().getFirst().envelope().alg());
+        }
+
+        @Test
+        void reports_a_missing_field_as_damage() throws IOException {
+            var store = new EnvelopeStore(dir);
+            String id = store.add(KEM);
+            Path file = dir.resolve(id + ".envelope");
+            Files.writeString(file, Files.readString(file).replaceFirst("nonce=[^\\n]*\\n", ""));
+
+            Stored stored = store.all().getFirst();
+
+            assertTrue(stored.damaged());
+            assertTrue(stored.problem().contains("has no 'nonce' field"));
+        }
+
+        @Test
+        void an_envelope_without_header_names_is_stored_without_them() throws IOException {
+            var store = new EnvelopeStore(dir);
+            var bare = new Envelope(null, null, null, bytes(12, 1), bytes(40, 2), WrappedDek.of("wrappedKey", bytes(4, 3)));
+
+            String id = store.add(bare);
+
+            String text = Files.readString(dir.resolve(id + ".envelope"));
+            assertFalse(text.contains("alg="));
+            assertFalse(text.contains("null"));
+        }
+    }
+
 }

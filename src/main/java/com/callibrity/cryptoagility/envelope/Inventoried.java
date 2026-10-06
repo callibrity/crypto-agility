@@ -3,7 +3,7 @@ package com.callibrity.cryptoagility.envelope;
 /**
  * An algorithm that can describe itself for a cryptographic inventory (a CBOM).
  *
- * Kept apart from KeyWrapper on purpose. The seam stays at three methods, and
+ * <p>Kept apart from KeyWrapper on purpose. The seam stays at three methods, and
  * the facts about an algorithm still live in the one class that implements it.
  */
 public interface Inventoried {

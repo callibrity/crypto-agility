@@ -1,58 +1,63 @@
 package com.callibrity.cryptoagility.envelope;
 
-import javax.crypto.Cipher;
-import javax.crypto.KeyGenerator;
+import com.callibrity.cryptoagility.cipher.DataCipher;
+import com.callibrity.cryptoagility.cipher.DataCiphers;
+import com.callibrity.cryptoagility.cipher.Sealed;
+import com.callibrity.cryptoagility.kms.DataKey;
+import com.callibrity.cryptoagility.kms.KeyManagementService;
+import com.callibrity.cryptoagility.kms.KeyMetadata;
+import com.callibrity.cryptoagility.wrapper.WrappedDek;
+
 import javax.crypto.SecretKey;
-import javax.crypto.spec.GCMParameterSpec;
+import java.io.IOException;
 import java.security.GeneralSecurityException;
-import java.security.SecureRandom;
+import java.security.InvalidKeyException;
 
 /**
- * Envelope encryption in plain JCA. The data is ALWAYS AES-256-GCM (quantum is
- * fine with that). The only algorithm-dependent step is how the data key (DEK)
- * gets wrapped, and that is delegated to a KeyWrapper.
+ * Envelope encryption against a KMS. The KMS hands out a fresh data key for
+ * each record and keeps the key that wraps it; the data is encrypted here, in
+ * the application, and never goes near the KMS.
  */
 public final class EnvelopeCrypto {
 
-    /** The algorithm that encrypts the data itself, whatever wraps the key. */
-    public static final String DATA_ALG_ID = "AES-256-GCM";
-
-    public static final AlgorithmFacts DATA_FACTS = AlgorithmFacts.of("ae", 256, 5, "keygen", "encrypt", "decrypt", "tag")
-            .withParameterSet("256").withMode("gcm").withOid("2.16.840.1.101.3.4.1.46");
-
-    private static final SecureRandom RNG = new SecureRandom();
-
     private EnvelopeCrypto() {}
 
-    public static Envelope encrypt(byte[] plaintext, KeyWrapper wrapper) throws GeneralSecurityException {
-        var kg = KeyGenerator.getInstance("AES");
-        kg.init(256);
-        SecretKey dek = kg.generateKey();
-        byte[] nonce = new byte[12];
-        RNG.nextBytes(nonce);
-        var c = Cipher.getInstance("AES/GCM/NoPadding");
-        c.init(Cipher.ENCRYPT_MODE, dek, new GCMParameterSpec(128, nonce));
-        byte[] ct = c.doFinal(plaintext);
-        WrappedDek w = wrapper.wrap(dek);                        // the only algorithm-dependent line
-        return new Envelope(wrapper.algId(), nonce, ct, w);      // and the envelope says which one it was
+    public static Envelope encrypt(byte[] plaintext, KeyManagementService kms, String keyId, DataCipher cipher)
+            throws GeneralSecurityException, IOException {
+        DataKey dataKey = kms.generateDataKey(keyId, cipher.keySpec());   // the only line that involves the KEK
+        Sealed sealed = cipher.seal(dataKey.key(), plaintext);
+        return new Envelope(dataKey.algorithm(), keyId, cipher.algId(),   // and the envelope says what it used
+                sealed.nonce(), sealed.ciphertext(), dataKey.wrapped());
     }
 
-    public static byte[] decrypt(Envelope env, WrapperRegistry registry) throws GeneralSecurityException {
-        KeyWrapper wrapper = registry.get(env.alg());            // each envelope names its own algorithm
-        SecretKey dek = wrapper.unwrap(env.wrappedDek());
-        var c = Cipher.getInstance("AES/GCM/NoPadding");
-        c.init(Cipher.DECRYPT_MODE, dek, new GCMParameterSpec(128, env.nonce()));
-        return c.doFinal(env.ciphertext());
+    public static byte[] decrypt(Envelope env, KeyManagementService kms) throws GeneralSecurityException, IOException {
+        DataCipher cipher = DataCiphers.get(env.enc());
+        SecretKey dataKey = kms.decryptDataKey(keyIdOf(env, kms), env.wrappedDek());
+        return cipher.open(dataKey, env.nonce(), env.ciphertext());
     }
 
     /**
-     * Moves an envelope to a new wrapping algorithm without touching the data.
-     * Only the 32-byte data key is unwrapped and wrapped again; the nonce and
-     * ciphertext are carried over as they are.
+     * Moves an envelope to another KMS key without touching the data. The KMS
+     * re-wraps the data key internally; the nonce, ciphertext and data cipher
+     * are carried over as they are.
      */
-    public static Envelope rewrap(Envelope env, WrapperRegistry registry, KeyWrapper target)
-            throws GeneralSecurityException {
-        SecretKey dek = registry.get(env.alg()).unwrap(env.wrappedDek());
-        return new Envelope(target.algId(), env.nonce(), env.ciphertext(), target.wrap(dek));
+    public static Envelope rewrap(Envelope env, KeyManagementService kms, String newKeyId)
+            throws GeneralSecurityException, IOException {
+        WrappedDek moved = kms.reEncrypt(keyIdOf(env, kms), env.wrappedDek(), newKeyId);
+        String algorithm = kms.describeKey(newKeyId).algorithm();
+        return new Envelope(algorithm, newKeyId, env.enc(), env.nonce(), env.ciphertext(), moved);
+    }
+
+    // The key id says which key opens the data key. If the envelope also names an algorithm, it must agree.
+    private static String keyIdOf(Envelope env, KeyManagementService kms) throws GeneralSecurityException, IOException {
+        if (env.kid() == null) {
+            throw new InvalidKeyException("the envelope names no key, so nothing says which key opens it");
+        }
+        KeyMetadata key = kms.describeKey(env.kid());
+        if (env.alg() != null && !env.alg().equals(key.algorithm())) {
+            throw new InvalidKeyException("the envelope says " + env.alg() + ", but key " + env.kid()
+                    + " is " + key.algorithm());
+        }
+        return env.kid();
     }
 }

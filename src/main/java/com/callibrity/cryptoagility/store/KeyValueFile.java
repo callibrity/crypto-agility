@@ -10,11 +10,11 @@ import java.util.List;
 import java.util.Map;
 
 /** Plain "name=value" text files, one field per line, so stored state is easy to open and read. */
-final class KeyValueFile {
+public final class KeyValueFile {
 
     private KeyValueFile() {}
 
-    static Map<String, String> read(Path file) throws IOException {
+    public static Map<String, String> read(Path file) throws IOException {
         Map<String, String> fields = new LinkedHashMap<>();
         for (String line : Files.readAllLines(file)) {
             int eq = line.indexOf('=');
@@ -26,18 +26,18 @@ final class KeyValueFile {
         return fields;
     }
 
-    static void write(Path file, Map<String, String> fields) throws IOException {
+    public static void write(Path file, Map<String, String> fields) throws IOException {
         List<String> lines = new ArrayList<>();
         fields.forEach((name, value) -> lines.add(name + "=" + value));
         Files.createDirectories(file.getParent());
         Files.write(file, lines);
     }
 
-    static String encode(byte[] bytes) {
+    public static String encode(byte[] bytes) {
         return Base64.getEncoder().encodeToString(bytes);
     }
 
-    static byte[] decode(Path file, String field, String value) throws IOException {
+    public static byte[] decode(Path file, String field, String value) throws IOException {
         if (value == null) {
             throw new IOException(file + " has no '" + field + "' field");
         }
