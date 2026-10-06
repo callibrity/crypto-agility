@@ -1,4 +1,21 @@
 <?xml version="1.0" encoding="UTF-8"?>
+<!--
+
+    Copyright © 2026 Callibrity, Inc. (contactus@callibrity.com)
+
+    Licensed under the Apache License, Version 2.0 (the "License");
+    you may not use this file except in compliance with the License.
+    You may obtain a copy of the License at
+
+        http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing, software
+    distributed under the License is distributed on an "AS IS" BASIS,
+    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+    See the License for the specific language governing permissions and
+    limitations under the License.
+
+-->
 <project xmlns="http://maven.apache.org/POM/4.0.0"
          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
@@ -11,13 +28,26 @@
 
     <name>Crypto agility</name>
     <description>Crypto agility via envelope encryption: swap the key-wrapping algorithm without a rewrite.</description>
+    <url>https://github.com/callibrity/crypto-agility</url>
+    <inceptionYear>2026</inceptionYear>
+
+    <organization>
+        <name>Callibrity, Inc.</name>
+        <url>https://www.callibrity.com</url>
+    </organization>
 
     <licenses>
         <license>
             <name>Apache License, Version 2.0</name>
             <url>https://www.apache.org/licenses/LICENSE-2.0.txt</url>
+            <distribution>repo</distribution>
         </license>
     </licenses>
+
+    <scm>
+        <url>https://github.com/callibrity/crypto-agility</url>
+        <connection>scm:git:https://github.com/callibrity/crypto-agility.git</connection>
+    </scm>
 
     <properties>
         <!-- JDK 25: ML-KEM (JEP 496) and HKDF (JEP 510) are both built in. -->
@@ -29,6 +59,11 @@
         <!-- Empty unless a coverage tool fills it in; the surefire configuration adds to it. -->
         <argLine/>
         <junit.version>6.1.3</junit.version>
+        <google-java-format.version>1.35.0</google-java-format.version>
+        <license-maven-plugin.version>5.1.1</license-maven-plugin.version>
+        <spotless-maven-plugin.version>3.9.0</spotless-maven-plugin.version>
+        <license.owner>Callibrity, Inc.</license.owner>
+        <license.email>contactus@callibrity.com</license.email>
     </properties>
 
     <dependencyManagement>
@@ -99,6 +134,50 @@
                 <version>3.6.4</version>
                 <configuration>
                     <mainClass>com.callibrity.cryptoagility.demo.Demo</mainClass>
+                </configuration>
+            </plugin>
+            <!-- Formatting and license headers are checked by CI, not by every build, so a change you are
+                 trying out never fails on layout. ./mvnw spotless:apply license:format fixes both. -->
+            <plugin>
+                <groupId>com.diffplug.spotless</groupId>
+                <artifactId>spotless-maven-plugin</artifactId>
+                <version>${spotless-maven-plugin.version}</version>
+                <configuration>
+                    <java>
+                        <includes>
+                            <include>src/main/java/**/*.java</include>
+                            <include>src/test/java/**/*.java</include>
+                        </includes>
+                        <googleJavaFormat>
+                            <version>${google-java-format.version}</version>
+                        </googleJavaFormat>
+                    </java>
+                </configuration>
+            </plugin>
+            <plugin>
+                <groupId>com.mycila</groupId>
+                <artifactId>license-maven-plugin</artifactId>
+                <version>${license-maven-plugin.version}</version>
+                <configuration>
+                    <properties>
+                        <owner>${license.owner}</owner>
+                        <email>${license.email}</email>
+                        <year>2026</year>
+                    </properties>
+                    <licenseSets>
+                        <licenseSet>
+                            <header>com/mycila/maven/plugin/license/templates/APACHE-2.txt</header>
+                            <includes>
+                                <include>src/**/*.java</include>
+                                <include>pom.xml</include>
+                                <include>demo</include>
+                                <include>docs/*.demo</include>
+                            </includes>
+                        </licenseSet>
+                    </licenseSets>
+                    <mapping>
+                        <demo>SCRIPT_STYLE</demo>
+                    </mapping>
                 </configuration>
             </plugin>
         </plugins>

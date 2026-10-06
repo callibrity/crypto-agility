@@ -107,6 +107,11 @@ including a full migration (inventory, rewrap, retire), adding an algorithm of
 your own, and taking a cryptographic inventory.
 `./mvnw test` runs the same claims as tests.
 
+CI also checks the code's formatting (google-java-format) and license headers.
+Your own builds never do, so changes you try out are never blocked on layout;
+`./mvnw spotless:apply license:format` tidies both if you want to send a change
+back.
+
 ## Where to look
 
 Everything is under `src/main/java/com/callibrity/cryptoagility/`.
@@ -128,9 +133,9 @@ Swap the implementation, never the call sites.
 
 ```java
 public interface KeyWrapper {
-    String algId();
-    WrappedDek wrap(SecretKey dek) throws GeneralSecurityException;
-    SecretKey unwrap(WrappedDek w) throws GeneralSecurityException;
+  String algId();
+  WrappedDek wrap(SecretKey dek) throws GeneralSecurityException;
+  SecretKey unwrap(WrappedDek w) throws GeneralSecurityException;
 }
 ```
 
@@ -149,10 +154,18 @@ configuration, and the envelope records both.
 This is `Envelope.seal`, the one place data gets encrypted:
 
 ```java
-DataKey dataKey = kms.generateDataKey(keyId, cipher.keySpec());   // the only line that involves the KEK
-Encrypted encrypted = cipher.encrypt(dataKey.key(), plaintext);   // the data never goes to the KMS
-return new Envelope(dataKey.algorithm(), keyId, cipher.algId(),   // and the envelope says what it used
-        encrypted.nonce(), encrypted.ciphertext(), dataKey.wrapped());
+// The only line that involves the KEK.
+DataKey dataKey = kms.generateDataKey(keyId, cipher.keySpec());
+// The data never goes to the KMS.
+Encrypted encrypted = cipher.encrypt(dataKey.key(), plaintext);
+// And the envelope says what it used.
+return new Envelope(
+    dataKey.algorithm(),
+    keyId,
+    cipher.algId(),
+    encrypted.nonce(),
+    encrypted.ciphertext(),
+    dataKey.wrapped());
 ```
 
 The application never holds a KEK. It names a KMS key and gets back a fresh data
