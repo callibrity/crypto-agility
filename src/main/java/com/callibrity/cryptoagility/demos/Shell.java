@@ -3,7 +3,6 @@ package com.callibrity.cryptoagility.demos;
 import com.callibrity.cryptoagility.commands.StoreCommands;
 import com.callibrity.cryptoagility.commands.CbomCommand;
 import com.callibrity.cryptoagility.commands.AlgorithmsCommand;
-import com.callibrity.cryptoagility.commands.SwapDemo;
 import com.callibrity.cryptoagility.commands.Workspace;
 import com.callibrity.cryptoagility.commands.UsageException;
 import com.callibrity.cryptoagility.commands.Paint;
@@ -28,7 +27,7 @@ import java.util.List;
 final class Shell {
 
     static final List<String> COMMANDS = List.of(
-            "use", "algorithms", "write", "read", "list", "show", "rewrap", "retire", "keys", "cbom", "swap", "help", "exit");
+            "use", "algorithms", "write", "read", "list", "show", "rewrap", "retire", "keys", "cbom", "help", "exit");
 
     private static final String HELP = """
               use [algorithm]   choose the algorithm that wraps new data, or list the choices
@@ -41,7 +40,6 @@ final class Shell {
               retire <alg>      stop reading an algorithm for this session, and see what that strands
               keys              list the key files
               cbom              inventory the algorithms protecting stored data, and write a CycloneDX CBOM
-              swap              the demo from the talk: RSA, then ML-KEM, both decrypt (in memory)
               help              this list
               exit              leave
             """;
@@ -79,7 +77,6 @@ final class Shell {
                 case "retire" -> retire(required(argument, "retire needs an algorithm, for example: retire RSA-OAEP-3072"));
                 case "keys" -> StoreCommands.keys(out, ws);
                 case "cbom" -> CbomCommand.run(out, ws);
-                case "swap" -> SwapDemo.run(out);
                 case "help", "?" -> out.print(HELP);
                 case "exit", "quit" -> {
                     out.flush();

@@ -68,7 +68,6 @@ up arrow recalls earlier lines.
 | `retire <algorithm>` | Stops reading an algorithm for this session, and names any records that strands |
 | `keys` | Lists the key files |
 | `cbom` | Inventories the algorithms protecting stored data, and writes a CycloneDX CBOM to `data/cbom.json` |
-| `swap` | The demo from the talk, in memory: RSA, then ML-KEM, and both decrypt |
 | `help`, `exit` | The command list, and the way out |
 
 Envelopes and keys are kept under `data/`, so what one session writes the next
@@ -92,8 +91,8 @@ Write your own scripts the same way: one command per line, `#` for comments.
 A single command can also be run without the prompt:
 
 ```sh
-./demo swap
-./mvnw -q compile exec:java -Dexec.args="swap"
+./demo cbom
+./mvnw -q compile exec:java -Dexec.args="cbom"
 ```
 
 [docs/exploring.md](docs/exploring.md) walks through seven experiments,

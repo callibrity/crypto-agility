@@ -22,7 +22,7 @@ import static com.callibrity.cryptoagility.envelope.EnvelopeCrypto.encrypt;
 import static java.nio.charset.StandardCharsets.UTF_8;
 
 /**
- * The commands that work on envelopes saved on disk, so the swap can be
+ * The commands that work on envelopes saved on disk, so an algorithm change can be
  * explored over time: write some records, change the algorithm, write more,
  * read them all, then rewrap. list, show and keys look at what is stored
  * without decrypting anything.

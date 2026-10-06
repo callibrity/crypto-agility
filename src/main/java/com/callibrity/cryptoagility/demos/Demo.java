@@ -11,7 +11,7 @@ import java.nio.file.Path;
  * Entry point. With no arguments it starts the interactive prompt. With
  * "--script <file>" it plays that script hands-free (narrate, press Enter,
  * each command types itself and runs). With any other arguments it runs them
- * as a single command, for example "swap" or "read".
+ * as a single command, for example "read" or "cbom".
  */
 public final class Demo {
 

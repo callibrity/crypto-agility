@@ -17,26 +17,31 @@ Everything you create lives under `data/`, which git ignores, so it is still
 there the next time you start the prompt. Delete that directory whenever you
 want a clean start.
 
-## 1. Watch the swap
+## 1. Watch the walkthrough
 
+```sh
+rm -rf data && ./demo --script docs/momentum.demo
 ```
-[RSA-OAEP-3072] > swap
-```
 
-This is the demo from the talk, run entirely in memory. Read `SwapDemo.java`
-next to the output: the call to `encrypt` is the same line both times, and
-`decrypt` is never told which algorithm to use. It finds out from the envelope.
+This plays the demo from the talk: press a key and the next command types
+itself and runs. Read `docs/momentum.demo` alongside it; each step has a comment.
 
-Things to notice in the output:
+Things to notice as it runs:
 
-- The RSA-wrapped key is 384 bytes. The ML-KEM-wrapped key is 48 bytes, plus a
+- The prompt's brackets change when `use` runs. That is the whole algorithm
+  change. No code changes, and nothing already stored is touched.
+- `read` is never told which algorithm to use. Each envelope says.
+- The RSA-wrapped key is 384 bytes. The ML-KEM-768 one is 48 bytes, plus a
   1088-byte KEM ciphertext. Post-quantum envelopes are bigger.
-- The data itself is AES-256-GCM in both cases. Only the wrap changed.
+- The data itself is AES-256-GCM throughout. Only the wrap changes.
+
+The experiments below take the same steps one at a time, so you can poke at
+each one.
 
 ## 2. Change the one line
 
-The `swap` demo does everything at once. This experiment does it the way a real
-system would: over time, with data on disk.
+Do the walkthrough's core move yourself. Start from a clean `data/` if you
+ran the script.
 
 ```
 [RSA-OAEP-3072] > write customer record #1
