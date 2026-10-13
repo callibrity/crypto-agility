@@ -28,12 +28,23 @@ jobs:
       matrix:
         java: ['25', '27']
     name: build (JDK ${{ matrix.java }})
+    env:
+      # Secrets are not available to pull requests from forks or Dependabot, so they skip the analysis.
+      ANALYZE: ${{ matrix.java == '25' && secrets.SONAR_TOKEN != '' }}
     steps:
       - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0 # SonarCloud uses the history to tell new code from old
       - uses: actions/setup-java@v6
         with:
           java-version: ${{ matrix.java }}
           distribution: 'liberica'
           cache: maven
       - name: Build and test
+        if: env.ANALYZE != 'true'
         run: ./mvnw -B verify
+      - name: Build, test and analyze on SonarCloud
+        if: env.ANALYZE == 'true'
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        run: ./mvnw -B jacoco:prepare-agent verify jacoco:report sonar:sonar
