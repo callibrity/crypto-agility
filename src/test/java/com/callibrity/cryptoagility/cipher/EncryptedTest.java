@@ -15,9 +15,11 @@
  */
 package com.callibrity.cryptoagility.cipher;
 
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import org.junit.jupiter.api.DisplayNameGeneration;
 import org.junit.jupiter.api.DisplayNameGenerator;
@@ -26,6 +28,42 @@ import org.junit.jupiter.api.Test;
 
 @DisplayNameGeneration(DisplayNameGenerator.ReplaceUnderscores.class)
 class EncryptedTest {
+
+  @Nested
+  class Guarding_its_bytes {
+
+    @Test
+    void changing_the_arrays_it_was_given_does_not_change_it() {
+      byte[] nonce = {1, 2};
+      byte[] ciphertext = {3, 4};
+      var encrypted = new Encrypted(nonce, ciphertext);
+
+      nonce[0] = 9;
+      ciphertext[0] = 9;
+
+      assertArrayEquals(new byte[] {1, 2}, encrypted.nonce());
+      assertArrayEquals(new byte[] {3, 4}, encrypted.ciphertext());
+    }
+
+    @Test
+    void changing_the_arrays_it_hands_out_does_not_change_it() {
+      var encrypted = new Encrypted(new byte[] {1, 2}, new byte[] {3, 4});
+
+      encrypted.nonce()[0] = 9;
+      encrypted.ciphertext()[0] = 9;
+
+      assertArrayEquals(new byte[] {1, 2}, encrypted.nonce());
+      assertArrayEquals(new byte[] {3, 4}, encrypted.ciphertext());
+    }
+
+    @Test
+    void refuses_a_missing_nonce_or_ciphertext() {
+      byte[] bytes = {1};
+
+      assertThrows(NullPointerException.class, () -> new Encrypted(null, bytes));
+      assertThrows(NullPointerException.class, () -> new Encrypted(bytes, null));
+    }
+  }
 
   @Nested
   class Comparing {

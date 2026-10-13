@@ -17,6 +17,7 @@ package com.callibrity.cryptoagility.cipher;
 
 import com.callibrity.cryptoagility.cbom.AlgorithmFacts;
 import java.security.GeneralSecurityException;
+import java.util.Arrays;
 import javax.crypto.Cipher;
 import javax.crypto.SecretKey;
 import javax.crypto.spec.IvParameterSpec;
@@ -64,11 +65,17 @@ public final class ChaCha20Poly1305 implements DataCipher {
   }
 
   // The JDK insists the key is labelled ChaCha20; a data key comes back from the KMS as plain
-  // bytes.
+  // bytes. SecretKeySpec keeps its own copy, so the copy taken here is wiped.
   private static SecretKey chacha(SecretKey key) {
-    return "ChaCha20".equals(key.getAlgorithm())
-        ? key
-        : new SecretKeySpec(key.getEncoded(), "ChaCha20");
+    if ("ChaCha20".equals(key.getAlgorithm())) {
+      return key;
+    }
+    byte[] bytes = key.getEncoded();
+    try {
+      return new SecretKeySpec(bytes, "ChaCha20");
+    } finally {
+      Arrays.fill(bytes, (byte) 0);
+    }
   }
 
   // A 256-bit key, so the same Grover argument as AES-256 puts it at the top of NIST's scale.

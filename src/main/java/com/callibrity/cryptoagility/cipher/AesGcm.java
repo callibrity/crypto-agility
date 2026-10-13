@@ -17,6 +17,7 @@ package com.callibrity.cryptoagility.cipher;
 
 import com.callibrity.cryptoagility.cbom.AlgorithmFacts;
 import java.security.GeneralSecurityException;
+import java.util.Arrays;
 import javax.crypto.Cipher;
 import javax.crypto.SecretKey;
 import javax.crypto.spec.GCMParameterSpec;
@@ -77,8 +78,17 @@ public final class AesGcm implements DataCipher {
   }
 
   // A key's bytes are what matter; this labels them as an AES key whatever they were called before.
+  // SecretKeySpec keeps its own copy, so the copy taken here is wiped.
   private static SecretKey aes(SecretKey key) {
-    return "AES".equals(key.getAlgorithm()) ? key : new SecretKeySpec(key.getEncoded(), "AES");
+    if ("AES".equals(key.getAlgorithm())) {
+      return key;
+    }
+    byte[] bytes = key.getEncoded();
+    try {
+      return new SecretKeySpec(bytes, "AES");
+    } finally {
+      Arrays.fill(bytes, (byte) 0);
+    }
   }
 
   @Override

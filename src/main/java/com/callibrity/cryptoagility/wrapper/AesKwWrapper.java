@@ -19,6 +19,7 @@ import com.callibrity.cryptoagility.cbom.AlgorithmFacts;
 import com.callibrity.cryptoagility.cbom.Inventoried;
 import java.security.GeneralSecurityException;
 import java.security.SecureRandom;
+import java.util.Arrays;
 import javax.crypto.Cipher;
 import javax.crypto.SecretKey;
 import javax.crypto.spec.SecretKeySpec;
@@ -52,8 +53,13 @@ public final class AesKwWrapper implements KeyWrapper, Inventoried {
 
   public static SecretKey newKey() {
     byte[] key = new byte[32];
-    new SecureRandom().nextBytes(key);
-    return new SecretKeySpec(key, "AES");
+    try {
+      new SecureRandom().nextBytes(key);
+      return new SecretKeySpec(key, "AES");
+    } finally {
+      // SecretKeySpec keeps its own copy; this one is wiped.
+      Arrays.fill(key, (byte) 0);
+    }
   }
 
   @Override

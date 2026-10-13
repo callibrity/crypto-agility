@@ -35,6 +35,7 @@ import java.security.SecureRandom;
 import java.security.Security;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HexFormat;
@@ -179,9 +180,14 @@ public final class LocalKms implements KeyManagementService {
       throws GeneralSecurityException, IOException {
     KeyMetadata key = describeKey(keyId);
     byte[] bytes = new byte[spec.bytes()];
-    RNG.nextBytes(bytes);
-    SecretKey dataKey = new SecretKeySpec(bytes, spec.algorithm());
-    return new DataKey(dataKey, keyId, key.algorithm(), engine(key).wrap(dataKey));
+    try {
+      RNG.nextBytes(bytes);
+      SecretKey dataKey = new SecretKeySpec(bytes, spec.algorithm());
+      return new DataKey(dataKey, keyId, key.algorithm(), engine(key).wrap(dataKey));
+    } finally {
+      // SecretKeySpec keeps its own copy; this one is wiped.
+      Arrays.fill(bytes, (byte) 0);
+    }
   }
 
   @Override

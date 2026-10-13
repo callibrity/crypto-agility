@@ -16,12 +16,30 @@
 package com.callibrity.cryptoagility.cipher;
 
 import java.util.Arrays;
+import java.util.Objects;
 
 /**
  * What an authenticated cipher produces: the nonce it used, and the ciphertext with its tag. Two
  * are equal when their bytes are, and toString shows sizes rather than bytes.
+ *
+ * <p>The bytes are copied on the way in and on the way out, so no caller can change them.
  */
 public record Encrypted(byte[] nonce, byte[] ciphertext) {
+
+  public Encrypted {
+    nonce = Objects.requireNonNull(nonce, "nonce").clone();
+    ciphertext = Objects.requireNonNull(ciphertext, "ciphertext").clone();
+  }
+
+  @Override
+  public byte[] nonce() {
+    return nonce.clone();
+  }
+
+  @Override
+  public byte[] ciphertext() {
+    return ciphertext.clone();
+  }
 
   @Override
   public boolean equals(Object other) {
@@ -37,10 +55,10 @@ public record Encrypted(byte[] nonce, byte[] ciphertext) {
 
   @Override
   public String toString() {
-    return "Encrypted[nonce=" + size(nonce) + ", ciphertext=" + size(ciphertext) + "]";
-  }
-
-  private static String size(byte[] bytes) {
-    return bytes == null ? "null" : bytes.length + " bytes";
+    return "Encrypted[nonce="
+        + nonce.length
+        + " bytes, ciphertext="
+        + ciphertext.length
+        + " bytes]";
   }
 }

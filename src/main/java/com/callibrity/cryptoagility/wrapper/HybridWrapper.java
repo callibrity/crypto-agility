@@ -27,6 +27,7 @@ import java.security.KeyPairGenerator;
 import java.security.PrivateKey;
 import java.security.PublicKey;
 import java.security.spec.X509EncodedKeySpec;
+import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import javax.crypto.KDF;
@@ -82,15 +83,21 @@ public final class HybridWrapper implements KeyWrapper, Inventoried {
 
   @Override
   public WrappedDek wrap(SecretKey dek) throws GeneralSecurityException {
-    // Classical half: a fresh X25519 key pair, agreed against our static public key.
+    // Classical half: a fresh X25519 key pair, which deriveKek agrees against our static public
+    // key.
     KeyPair ephemeral = newX25519KeyPair();
     byte[] ephemeralPub = ephemeral.getPublic().getEncoded();
-    byte[] classicalSecret = agree(ephemeral.getPrivate(), x25519.getPublic());
 
     // Post-quantum half: ML-KEM encapsulation, exactly as in MlKemWrapper.
     KEM.Encapsulated enc = kem.newEncapsulator(mlKem.getPublic()).encapsulate();
 
-    SecretKey kek = deriveKek(classicalSecret, enc.key(), ephemeralPub, enc.encapsulation());
+    SecretKey kek =
+        deriveKek(
+            ephemeral.getPrivate(),
+            x25519.getPublic(),
+            enc.key(),
+            ephemeralPub,
+            enc.encapsulation());
     Map<String, byte[]> kemFields = new LinkedHashMap<>();
     kemFields.put(EPHEMERAL_KEY, ephemeralPub);
     kemFields.put(KEM_CT, enc.encapsulation());
@@ -104,11 +111,10 @@ public final class HybridWrapper implements KeyWrapper, Inventoried {
 
     PublicKey ephemeral =
         KeyFactory.getInstance("X25519").generatePublic(new X509EncodedKeySpec(ephemeralPub));
-    byte[] classicalSecret = agree(x25519.getPrivate(), ephemeral);
     SecretKey pqSecret = kem.newDecapsulator(mlKem.getPrivate()).decapsulate(mlKemCt);
 
     return AesGcmKeyWrap.unwrap(
-        deriveKek(classicalSecret, pqSecret, ephemeralPub, mlKemCt), w, algId());
+        deriveKek(x25519.getPrivate(), ephemeral, pqSecret, ephemeralPub, mlKemCt), w, algId());
   }
 
   private static byte[] agree(PrivateKey mine, PublicKey theirs) throws GeneralSecurityException {
@@ -119,21 +125,26 @@ public final class HybridWrapper implements KeyWrapper, Inventoried {
   }
 
   // HKDF over both secrets. The public values go into the info so the key is bound to this
-  // exchange.
+  // exchange. The X25519 secret exists only inside this method, and is wiped once the KDF has it.
   private static SecretKey deriveKek(
-      byte[] classicalSecret, SecretKey pqSecret, byte[] ephemeralPub, byte[] mlKemCt)
+      PrivateKey mine, PublicKey theirs, SecretKey pqSecret, byte[] ephemeralPub, byte[] mlKemCt)
       throws GeneralSecurityException {
     var info = new ByteArrayOutputStream();
     info.writeBytes(KDF_LABEL);
     info.writeBytes(ephemeralPub);
     info.writeBytes(mlKemCt);
-    var hkdf = KDF.getInstance("HKDF-SHA256");
-    var params =
-        HKDFParameterSpec.ofExtract()
-            .addIKM(classicalSecret)
-            .addIKM(pqSecret)
-            .thenExpand(info.toByteArray(), 32);
-    return hkdf.deriveKey("AES", params);
+    byte[] classicalSecret = agree(mine, theirs);
+    try {
+      var hkdf = KDF.getInstance("HKDF-SHA256");
+      var params =
+          HKDFParameterSpec.ofExtract()
+              .addIKM(classicalSecret)
+              .addIKM(pqSecret)
+              .thenExpand(info.toByteArray(), 32);
+      return hkdf.deriveKey("AES", params);
+    } finally {
+      Arrays.fill(classicalSecret, (byte) 0);
+    }
   }
 
   // An attacker must break both halves, so it is at least as strong as ML-KEM-768, the stronger of

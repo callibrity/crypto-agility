@@ -83,11 +83,11 @@ class DataCiphersTest {
     void rejects_tampered_ciphertext(DataCipher cipher) throws GeneralSecurityException {
       SecretKey key = keyFor(cipher);
       Encrypted encrypted = cipher.encrypt(key, PLAINTEXT);
-      encrypted.ciphertext()[0] ^= 1;
+      byte[] tampered = encrypted.ciphertext();
+      tampered[0] ^= 1;
 
       assertThrows(
-          AEADBadTagException.class,
-          () -> cipher.decrypt(key, encrypted.nonce(), encrypted.ciphertext()));
+          AEADBadTagException.class, () -> cipher.decrypt(key, encrypted.nonce(), tampered));
     }
 
     @ParameterizedTest

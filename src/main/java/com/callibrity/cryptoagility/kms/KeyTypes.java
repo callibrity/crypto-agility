@@ -22,6 +22,7 @@ import java.security.KeyFactory;
 import java.security.KeyPair;
 import java.security.spec.PKCS8EncodedKeySpec;
 import java.security.spec.X509EncodedKeySpec;
+import java.util.Arrays;
 import java.util.Base64;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -122,14 +123,19 @@ public final class KeyTypes {
         SecretKey key = source.generate();
         Map<String, String> material = new LinkedHashMap<>();
         material.put("keyAlgorithm", key.getAlgorithm());
-        material.put("key", Base64.getEncoder().encodeToString(key.getEncoded()));
+        material.put("key", encodeAndWipe(key.getEncoded()));
         return material;
       }
 
       @Override
       public KeyWrapper wrapper(Map<String, String> material) throws GeneralSecurityException {
-        return engine.wrapper(
-            new SecretKeySpec(decode(material, "key"), field(material, "keyAlgorithm")));
+        String keyAlgorithm = field(material, "keyAlgorithm");
+        byte[] key = decode(material, "key");
+        try {
+          return engine.wrapper(new SecretKeySpec(key, keyAlgorithm));
+        } finally {
+          Arrays.fill(key, (byte) 0);
+        }
       }
     };
   }
@@ -138,16 +144,29 @@ public final class KeyTypes {
     material.put(prefix + "keyAlgorithm", keyPair.getPublic().getAlgorithm());
     material.put(
         prefix + "public", Base64.getEncoder().encodeToString(keyPair.getPublic().getEncoded()));
-    material.put(
-        prefix + "private", Base64.getEncoder().encodeToString(keyPair.getPrivate().getEncoded()));
+    material.put(prefix + "private", encodeAndWipe(keyPair.getPrivate().getEncoded()));
   }
 
   private static KeyPair keyPair(Map<String, String> material, String prefix)
       throws GeneralSecurityException {
     var factory = KeyFactory.getInstance(field(material, prefix + "keyAlgorithm"));
-    return new KeyPair(
-        factory.generatePublic(new X509EncodedKeySpec(decode(material, prefix + "public"))),
-        factory.generatePrivate(new PKCS8EncodedKeySpec(decode(material, prefix + "private"))));
+    var publicKey =
+        factory.generatePublic(new X509EncodedKeySpec(decode(material, prefix + "public")));
+    byte[] privateKey = decode(material, prefix + "private");
+    try {
+      return new KeyPair(publicKey, factory.generatePrivate(new PKCS8EncodedKeySpec(privateKey)));
+    } finally {
+      Arrays.fill(privateKey, (byte) 0);
+    }
+  }
+
+  // For secret and private key bytes: the Base64 is what gets stored, and the raw bytes are wiped.
+  private static String encodeAndWipe(byte[] secret) {
+    try {
+      return Base64.getEncoder().encodeToString(secret);
+    } finally {
+      Arrays.fill(secret, (byte) 0);
+    }
   }
 
   private static String field(Map<String, String> material, String name)

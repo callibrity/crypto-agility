@@ -44,9 +44,28 @@ import javax.crypto.SecretKey;
  *
  * <p>Sealing and opening happen here, in the application. The KMS hands out a fresh data key for
  * each envelope and keeps the key that wraps it; the data itself never goes near the KMS.
+ *
+ * <p>The nonce and ciphertext are copied on the way in and on the way out, so no caller can change
+ * them.
  */
 public record Envelope(
     String alg, String kid, String enc, byte[] nonce, byte[] ciphertext, WrappedDek wrappedDek) {
+
+  public Envelope {
+    nonce = Objects.requireNonNull(nonce, "nonce").clone();
+    ciphertext = Objects.requireNonNull(ciphertext, "ciphertext").clone();
+    Objects.requireNonNull(wrappedDek, "wrappedDek");
+  }
+
+  @Override
+  public byte[] nonce() {
+    return nonce.clone();
+  }
+
+  @Override
+  public byte[] ciphertext() {
+    return ciphertext.clone();
+  }
 
   /** Encrypts the plaintext under a fresh data key from the KMS, and records what was used. */
   public static Envelope seal(
@@ -121,24 +140,16 @@ public record Envelope(
   }
 
   // Records compare arrays by identity, so equality and hashing are spelled out to compare their
-  // bytes.
+  // bytes. The fields are read directly, because the accessors would copy them.
   @Override
   public boolean equals(Object other) {
-    return other
-            instanceof
-            Envelope(
-                String alg1,
-                String kid1,
-                String enc1,
-                byte[] nonce1,
-                byte[] ciphertext1,
-                WrappedDek dek)
-        && Objects.equals(alg, alg1)
-        && Objects.equals(kid, kid1)
-        && Objects.equals(enc, enc1)
-        && Arrays.equals(nonce, nonce1)
-        && Arrays.equals(ciphertext, ciphertext1)
-        && Objects.equals(wrappedDek, dek);
+    return other instanceof Envelope that
+        && Objects.equals(alg, that.alg)
+        && Objects.equals(kid, that.kid)
+        && Objects.equals(enc, that.enc)
+        && Arrays.equals(nonce, that.nonce)
+        && Arrays.equals(ciphertext, that.ciphertext)
+        && wrappedDek.equals(that.wrappedDek);
   }
 
   @Override
@@ -157,15 +168,11 @@ public record Envelope(
         + ", enc="
         + enc
         + ", nonce="
-        + size(nonce)
-        + ", ciphertext="
-        + size(ciphertext)
-        + ", wrappedDek="
+        + nonce.length
+        + " bytes, ciphertext="
+        + ciphertext.length
+        + " bytes, wrappedDek="
         + wrappedDek
         + "]";
-  }
-
-  private static String size(byte[] bytes) {
-    return bytes == null ? "null" : bytes.length + " bytes";
   }
 }

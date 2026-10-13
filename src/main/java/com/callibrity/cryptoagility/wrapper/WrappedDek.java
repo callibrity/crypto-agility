@@ -20,6 +20,7 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.Objects;
 import java.util.StringJoiner;
 
 /**
@@ -28,15 +29,31 @@ import java.util.StringJoiner;
  * <p>The envelope does not know or care what the fields are. RSA produces one (the encrypted key).
  * A KEM produces three. The next algorithm can produce something else, and nothing that stores or
  * carries envelopes has to change. Only the wrapper that wrote the fields reads them back.
+ *
+ * <p>Every field's bytes are copied on the way in and on the way out, so no caller can change them.
  */
 public record WrappedDek(Map<String, byte[]> fields) {
 
   public WrappedDek {
-    fields = Collections.unmodifiableMap(new LinkedHashMap<>(fields));
+    Objects.requireNonNull(fields, "fields");
+    Map<String, byte[]> copy = new LinkedHashMap<>();
+    for (Map.Entry<String, byte[]> field : fields.entrySet()) {
+      String name = Objects.requireNonNull(field.getKey(), "field name");
+      copy.put(name, Objects.requireNonNull(field.getValue(), name).clone());
+    }
+    fields = Collections.unmodifiableMap(copy);
   }
 
   public static WrappedDek of(String name, byte[] value) {
     return new WrappedDek(Map.of(name, value));
+  }
+
+  /** A copy of the fields; changing it, or the bytes in it, does not change this wrapped key. */
+  @Override
+  public Map<String, byte[]> fields() {
+    Map<String, byte[]> copy = new LinkedHashMap<>();
+    fields.forEach((name, value) -> copy.put(name, value.clone()));
+    return Collections.unmodifiableMap(copy);
   }
 
   /**
@@ -48,7 +65,7 @@ public record WrappedDek(Map<String, byte[]> fields) {
       throw new InvalidKeyException(
           "wrapped key has no " + name + " field, so it was not wrapped with " + algId);
     }
-    return value;
+    return value.clone();
   }
 
   // A map of arrays compares its values by identity, so equality and hashing are spelled out to

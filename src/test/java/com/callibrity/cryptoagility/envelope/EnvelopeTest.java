@@ -64,6 +64,8 @@ class EnvelopeTest {
     mlKemKey = kms.createKey(MlKemWrapper.ParameterSet.ML_KEM_768.algId()).keyId();
   }
 
+  private static final WrappedDek WRAPPED_KEY = WrappedDek.of("wrappedKey", new byte[] {7, 7});
+
   private static Envelope envelope(String alg, byte ciphertextByte) {
     return new Envelope(
         alg,
@@ -71,7 +73,7 @@ class EnvelopeTest {
         "AES-256-GCM",
         new byte[] {1, 2},
         new byte[] {ciphertextByte},
-        WrappedDek.of("wrappedKey", new byte[] {7, 7}));
+        WRAPPED_KEY);
   }
 
   @Nested
@@ -100,9 +102,12 @@ class EnvelopeTest {
     @Test
     void tampered_ciphertext_is_rejected() throws GeneralSecurityException, IOException {
       Envelope env = Envelope.seal(PLAINTEXT, kms, rsaKey, AesGcm.INSTANCE);
-      env.ciphertext()[0] ^= 1;
+      byte[] ciphertext = env.ciphertext();
+      ciphertext[0] ^= 1;
+      var tampered =
+          new Envelope(env.alg(), env.kid(), env.enc(), env.nonce(), ciphertext, env.wrappedDek());
 
-      assertThrows(AEADBadTagException.class, () -> env.open(kms));
+      assertThrows(AEADBadTagException.class, () -> tampered.open(kms));
     }
   }
 
@@ -213,6 +218,49 @@ class EnvelopeTest {
       var e = assertThrows(UnknownAlgorithmException.class, () -> odd.open(kms));
 
       assertTrue(e.getMessage().contains("ROT13"));
+    }
+  }
+
+  @Nested
+  class Guarding_its_bytes {
+
+    @Test
+    void changing_the_arrays_it_was_given_does_not_change_it() {
+      byte[] nonce = {1, 2};
+      byte[] ciphertext = {3, 4};
+      var env =
+          new Envelope("ML-KEM-768", "key-000001", "AES-256-GCM", nonce, ciphertext, WRAPPED_KEY);
+
+      nonce[0] = 9;
+      ciphertext[0] = 9;
+
+      assertArrayEquals(new byte[] {1, 2}, env.nonce());
+      assertArrayEquals(new byte[] {3, 4}, env.ciphertext());
+    }
+
+    @Test
+    void changing_the_arrays_it_hands_out_does_not_change_it() {
+      Envelope env = envelope("ML-KEM-768", (byte) 5);
+
+      env.nonce()[0] = 9;
+      env.ciphertext()[0] = 9;
+
+      assertEquals(envelope("ML-KEM-768", (byte) 5), env);
+    }
+
+    @Test
+    void refuses_a_missing_nonce_ciphertext_or_wrapped_key() {
+      byte[] bytes = {1};
+
+      assertThrows(
+          NullPointerException.class,
+          () -> new Envelope("ML-KEM-768", "key-000001", "AES-256-GCM", null, bytes, WRAPPED_KEY));
+      assertThrows(
+          NullPointerException.class,
+          () -> new Envelope("ML-KEM-768", "key-000001", "AES-256-GCM", bytes, null, WRAPPED_KEY));
+      assertThrows(
+          NullPointerException.class,
+          () -> new Envelope("ML-KEM-768", "key-000001", "AES-256-GCM", bytes, bytes, null));
     }
   }
 
