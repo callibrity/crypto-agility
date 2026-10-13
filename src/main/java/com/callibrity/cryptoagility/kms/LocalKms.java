@@ -19,7 +19,7 @@ import com.callibrity.cryptoagility.cbom.Inventoried;
 import com.callibrity.cryptoagility.cipher.DataKeySpec;
 import com.callibrity.cryptoagility.envelope.UnknownAlgorithmException;
 import com.callibrity.cryptoagility.store.KeyValueFile;
-import com.callibrity.cryptoagility.wrapper.AesKwWrapper;
+import com.callibrity.cryptoagility.wrapper.AesGcmWrapper;
 import com.callibrity.cryptoagility.wrapper.EcdhWrapper;
 import com.callibrity.cryptoagility.wrapper.HqcWrapper;
 import com.callibrity.cryptoagility.wrapper.HybridWrapper;
@@ -91,7 +91,8 @@ public final class LocalKms implements KeyManagementService {
     var kms = new LocalKms(dir);
     kms.register(KeyTypes.keyPair(RsaWrapper.ALG_ID, RsaWrapper::newKeyPair, RsaWrapper::new));
     kms.register(KeyTypes.keyPair(EcdhWrapper.ALG_ID, EcdhWrapper::newKeyPair, EcdhWrapper::new));
-    kms.register(KeyTypes.secretKey(AesKwWrapper.ALG_ID, AesKwWrapper::newKey, AesKwWrapper::new));
+    kms.register(
+        KeyTypes.secretKey(AesGcmWrapper.ALG_ID, AesGcmWrapper::newKey, AesGcmWrapper::new));
     for (MlKemWrapper.ParameterSet set : MlKemWrapper.ParameterSet.values()) {
       kms.register(
           KeyTypes.keyPair(
@@ -176,14 +177,15 @@ public final class LocalKms implements KeyManagementService {
   }
 
   @Override
-  public DataKey generateDataKey(String keyId, DataKeySpec spec)
+  public DataKey generateDataKey(String keyId, DataKeySpec spec, byte[] encryptionContext)
       throws GeneralSecurityException, IOException {
     KeyMetadata key = describeKey(keyId);
     byte[] bytes = new byte[spec.bytes()];
     try {
       RNG.nextBytes(bytes);
       SecretKey dataKey = new SecretKeySpec(bytes, spec.algorithm());
-      return new DataKey(dataKey, keyId, key.algorithm(), engine(key).wrap(dataKey));
+      return new DataKey(
+          dataKey, keyId, key.algorithm(), engine(key).wrap(dataKey, encryptionContext));
     } finally {
       // SecretKeySpec keeps its own copy; this one is wiped.
       Arrays.fill(bytes, (byte) 0);
@@ -191,18 +193,23 @@ public final class LocalKms implements KeyManagementService {
   }
 
   @Override
-  public SecretKey decryptDataKey(String keyId, WrappedDek wrapped)
+  public SecretKey decryptDataKey(String keyId, WrappedDek wrapped, byte[] encryptionContext)
       throws GeneralSecurityException, IOException {
-    return engine(describeKey(keyId)).unwrap(wrapped);
+    return engine(describeKey(keyId)).unwrap(wrapped, encryptionContext);
   }
 
   // The plaintext data key exists only inside this method: the caller gets back a wrapped key and
   // nothing else.
   @Override
-  public WrappedDek reEncrypt(String keyId, WrappedDek wrapped, String newKeyId)
+  public WrappedDek reEncrypt(
+      String keyId,
+      WrappedDek wrapped,
+      byte[] encryptionContext,
+      String newKeyId,
+      byte[] newEncryptionContext)
       throws GeneralSecurityException, IOException {
-    SecretKey dataKey = decryptDataKey(keyId, wrapped);
-    return engine(describeKey(newKeyId)).wrap(dataKey);
+    SecretKey dataKey = decryptDataKey(keyId, wrapped, encryptionContext);
+    return engine(describeKey(newKeyId)).wrap(dataKey, newEncryptionContext);
   }
 
   @Override

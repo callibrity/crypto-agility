@@ -121,16 +121,16 @@ public final class HqcWrapper implements KeyWrapper, Inventoried {
   }
 
   @Override
-  public WrappedDek wrap(SecretKey dek) throws GeneralSecurityException {
+  public WrappedDek wrap(SecretKey dek, byte[] aad) throws GeneralSecurityException {
     KEM.Encapsulated enc = kem.newEncapsulator(kp.getPublic()).encapsulate(0, 32, "AES");
-    return AesGcmKeyWrap.wrap(enc.key(), dek, Map.of(KEM_CT, enc.encapsulation()));
+    return AesGcmKeyWrap.wrap(enc.key(), dek, Map.of(KEM_CT, enc.encapsulation()), aad);
   }
 
   @Override
-  public SecretKey unwrap(WrappedDek w) throws GeneralSecurityException {
+  public SecretKey unwrap(WrappedDek w, byte[] aad) throws GeneralSecurityException {
     SecretKey kek =
         kem.newDecapsulator(kp.getPrivate()).decapsulate(w.require(KEM_CT, algId()), 0, 32, "AES");
-    return AesGcmKeyWrap.unwrap(kek, w, algId());
+    return AesGcmKeyWrap.unwrap(kek, w, algId(), aad);
   }
 
   // The three parameter sets target NIST categories 1, 3 and 5, like ML-KEM's. There is no

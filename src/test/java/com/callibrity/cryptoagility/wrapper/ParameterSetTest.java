@@ -37,6 +37,8 @@ class ParameterSetTest {
 
   private static final SecretKey DATA_KEY = new SecretKeySpec(new byte[32], "AES");
 
+  private static final byte[] AAD = {1, 2, 3};
+
   private static String oidIn(PublicKey key) {
     return SubjectPublicKeyInfo.getInstance(key.getEncoded()).getAlgorithm().getAlgorithm().getId();
   }
@@ -50,10 +52,10 @@ class ParameterSetTest {
         throws GeneralSecurityException {
       var wrapper = new MlKemWrapper(set, MlKemWrapper.newKeyPair(set));
 
-      WrappedDek wrapped = wrapper.wrap(DATA_KEY);
+      WrappedDek wrapped = wrapper.wrap(DATA_KEY, AAD);
 
       assertEquals(set.algId(), wrapper.algId());
-      assertArrayEquals(DATA_KEY.getEncoded(), wrapper.unwrap(wrapped).getEncoded());
+      assertArrayEquals(DATA_KEY.getEncoded(), wrapper.unwrap(wrapped, AAD).getEncoded());
     }
 
     @ParameterizedTest
@@ -100,10 +102,10 @@ class ParameterSetTest {
         throws GeneralSecurityException {
       var wrapper = new HqcWrapper(set, HqcWrapper.newKeyPair(set));
 
-      WrappedDek wrapped = wrapper.wrap(DATA_KEY);
+      WrappedDek wrapped = wrapper.wrap(DATA_KEY, AAD);
 
       assertEquals(set.algId(), wrapper.algId());
-      assertArrayEquals(DATA_KEY.getEncoded(), wrapper.unwrap(wrapped).getEncoded());
+      assertArrayEquals(DATA_KEY.getEncoded(), wrapper.unwrap(wrapped, AAD).getEncoded());
     }
 
     @ParameterizedTest

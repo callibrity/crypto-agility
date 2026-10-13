@@ -110,17 +110,17 @@ public final class MlKemWrapper implements KeyWrapper, Inventoried {
   }
 
   @Override
-  public WrappedDek wrap(SecretKey dek) throws GeneralSecurityException {
+  public WrappedDek wrap(SecretKey dek, byte[] aad) throws GeneralSecurityException {
     KEM.Encapsulator e = kem.newEncapsulator(kp.getPublic());
     KEM.Encapsulated enc = e.encapsulate(0, 32, "AES"); // 32-byte AES key from the KEM
-    return AesGcmKeyWrap.wrap(enc.key(), dek, Map.of(KEM_CT, enc.encapsulation()));
+    return AesGcmKeyWrap.wrap(enc.key(), dek, Map.of(KEM_CT, enc.encapsulation()), aad);
   }
 
   @Override
-  public SecretKey unwrap(WrappedDek w) throws GeneralSecurityException {
+  public SecretKey unwrap(WrappedDek w, byte[] aad) throws GeneralSecurityException {
     KEM.Decapsulator d = kem.newDecapsulator(kp.getPrivate());
     SecretKey kek = d.decapsulate(w.require(KEM_CT, algId()), 0, 32, "AES");
-    return AesGcmKeyWrap.unwrap(kek, w, algId());
+    return AesGcmKeyWrap.unwrap(kek, w, algId(), aad);
   }
 
   // FIPS 203 puts the three parameter sets in NIST categories 1, 3 and 5: about as hard to break

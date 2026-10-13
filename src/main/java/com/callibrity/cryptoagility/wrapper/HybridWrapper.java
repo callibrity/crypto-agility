@@ -82,7 +82,7 @@ public final class HybridWrapper implements KeyWrapper, Inventoried {
   }
 
   @Override
-  public WrappedDek wrap(SecretKey dek) throws GeneralSecurityException {
+  public WrappedDek wrap(SecretKey dek, byte[] aad) throws GeneralSecurityException {
     // Classical half: a fresh X25519 key pair, which deriveKek agrees against our static public
     // key.
     KeyPair ephemeral = newX25519KeyPair();
@@ -101,11 +101,11 @@ public final class HybridWrapper implements KeyWrapper, Inventoried {
     Map<String, byte[]> kemFields = new LinkedHashMap<>();
     kemFields.put(EPHEMERAL_KEY, ephemeralPub);
     kemFields.put(KEM_CT, enc.encapsulation());
-    return AesGcmKeyWrap.wrap(kek, dek, kemFields);
+    return AesGcmKeyWrap.wrap(kek, dek, kemFields, aad);
   }
 
   @Override
-  public SecretKey unwrap(WrappedDek w) throws GeneralSecurityException {
+  public SecretKey unwrap(WrappedDek w, byte[] aad) throws GeneralSecurityException {
     byte[] ephemeralPub = w.require(EPHEMERAL_KEY, algId());
     byte[] mlKemCt = w.require(KEM_CT, algId());
 
@@ -114,7 +114,10 @@ public final class HybridWrapper implements KeyWrapper, Inventoried {
     SecretKey pqSecret = kem.newDecapsulator(mlKem.getPrivate()).decapsulate(mlKemCt);
 
     return AesGcmKeyWrap.unwrap(
-        deriveKek(x25519.getPrivate(), ephemeral, pqSecret, ephemeralPub, mlKemCt), w, algId());
+        deriveKek(x25519.getPrivate(), ephemeral, pqSecret, ephemeralPub, mlKemCt),
+        w,
+        algId(),
+        aad);
   }
 
   private static byte[] agree(PrivateKey mine, PublicKey theirs) throws GeneralSecurityException {

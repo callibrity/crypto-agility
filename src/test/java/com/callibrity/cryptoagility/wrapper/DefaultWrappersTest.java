@@ -41,13 +41,14 @@ import org.junit.jupiter.params.provider.MethodSource;
 class DefaultWrappersTest {
 
   private static final SecretKey DATA_KEY = new SecretKeySpec(new byte[32], "AES");
+  private static final byte[] AAD = {1, 2, 3};
 
   // Each wrapper made with its no-argument constructor, which generates a fresh key.
   static List<KeyWrapper> wrappers() throws GeneralSecurityException {
     return List.of(
         new RsaWrapper(),
         new EcdhWrapper(),
-        new AesKwWrapper(),
+        new AesGcmWrapper(),
         new MlKemWrapper(),
         new HybridWrapper(),
         new HqcWrapper());
@@ -59,7 +60,23 @@ class DefaultWrappersTest {
     @ParameterizedTest
     @MethodSource("com.callibrity.cryptoagility.wrapper.DefaultWrappersTest#wrappers")
     void unwraps_what_it_wrapped(KeyWrapper wrapper) throws GeneralSecurityException {
-      assertArrayEquals(DATA_KEY.getEncoded(), wrapper.unwrap(wrapper.wrap(DATA_KEY)).getEncoded());
+      assertArrayEquals(
+          DATA_KEY.getEncoded(), wrapper.unwrap(wrapper.wrap(DATA_KEY, AAD), AAD).getEncoded());
+    }
+
+    @ParameterizedTest
+    @MethodSource("com.callibrity.cryptoagility.wrapper.DefaultWrappersTest#wrappers")
+    void refuses_to_unwrap_with_other_associated_data(KeyWrapper wrapper)
+        throws GeneralSecurityException {
+      WrappedDek wrapped = wrapper.wrap(DATA_KEY, AAD);
+
+      assertThrows(GeneralSecurityException.class, () -> wrapper.unwrap(wrapped, new byte[] {9}));
+    }
+
+    @ParameterizedTest
+    @MethodSource("com.callibrity.cryptoagility.wrapper.DefaultWrappersTest#wrappers")
+    void refuses_missing_associated_data(KeyWrapper wrapper) {
+      assertThrows(NullPointerException.class, () -> wrapper.wrap(DATA_KEY, null));
     }
 
     @ParameterizedTest
@@ -75,7 +92,7 @@ class DefaultWrappersTest {
     void uses_the_usual_strengths() throws GeneralSecurityException {
       assertEquals("RSA-OAEP-3072", new RsaWrapper().algId());
       assertEquals("ECDH-X25519", new EcdhWrapper().algId());
-      assertEquals("AES-256-KW", new AesKwWrapper().algId());
+      assertEquals("AES-256-GCMKW", new AesGcmWrapper().algId());
       assertEquals("ML-KEM-768", new MlKemWrapper(MlKemWrapper.newKeyPair()).algId());
       assertEquals("HQC-192", new HqcWrapper(HqcWrapper.newKeyPair()).algId());
     }
@@ -112,18 +129,20 @@ class DefaultWrappersTest {
     @Test
     void needs_the_classical_half_intact() throws GeneralSecurityException {
       var hybrid = new HybridWrapper();
-      WrappedDek wrapped = hybrid.wrap(dataKey);
+      WrappedDek wrapped = hybrid.wrap(dataKey, AAD);
 
       assertThrows(
-          GeneralSecurityException.class, () -> hybrid.unwrap(tampered(wrapped, "ephemeralKey")));
+          GeneralSecurityException.class,
+          () -> hybrid.unwrap(tampered(wrapped, "ephemeralKey"), AAD));
     }
 
     @Test
     void needs_the_post_quantum_half_intact() throws GeneralSecurityException {
       var hybrid = new HybridWrapper();
-      WrappedDek wrapped = hybrid.wrap(dataKey);
+      WrappedDek wrapped = hybrid.wrap(dataKey, AAD);
 
-      assertThrows(GeneralSecurityException.class, () -> hybrid.unwrap(tampered(wrapped, "kemCt")));
+      assertThrows(
+          GeneralSecurityException.class, () -> hybrid.unwrap(tampered(wrapped, "kemCt"), AAD));
     }
 
     @Test

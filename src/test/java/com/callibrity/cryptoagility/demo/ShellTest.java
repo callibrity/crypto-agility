@@ -27,7 +27,7 @@ import com.callibrity.cryptoagility.kms.KeyMetadata;
 import com.callibrity.cryptoagility.kms.KeyTypes;
 import com.callibrity.cryptoagility.kms.LocalKms;
 import com.callibrity.cryptoagility.store.EnvelopeStore.Stored;
-import com.callibrity.cryptoagility.wrapper.AesKwWrapper;
+import com.callibrity.cryptoagility.wrapper.AesGcmWrapper;
 import com.callibrity.cryptoagility.wrapper.KeyWrapper;
 import com.callibrity.cryptoagility.wrapper.WrappedDek;
 import java.io.IOException;
@@ -201,7 +201,7 @@ class ShellTest {
 
     @Test
     void describes_key_pairs_and_secret_keys_alike() {
-      shell.execute("use AES-256-KW");
+      shell.execute("use AES-256-GCMKW");
 
       assertTrue(shell.execute("keys"));
     }
@@ -244,13 +244,14 @@ class ShellTest {
     }
 
     @Test
-    void an_envelope_that_names_no_algorithm_still_opens_through_its_key() throws IOException {
+    void an_envelope_whose_algorithm_was_removed_cannot_be_opened() throws IOException {
       damage("record-0001", "alg=RSA-OAEP-3072\n", "");
 
       shell.execute("read");
 
-      assertTrue(output.toString().contains("record-0001 ((none)) -> customer record #1"));
-      assertFalse(output.toString().contains("null"));
+      assertTrue(output.toString().contains("record-0001 ((none))"));
+      assertTrue(output.toString().contains("UNREADABLE"));
+      assertFalse(output.toString().contains("customer record #1"));
     }
 
     @Test
@@ -506,7 +507,7 @@ class ShellTest {
           LocalKms.withStandardAlgorithms(dataDir.resolve("kms"))
               .register(
                   KeyTypes.secretKey(
-                      "EXPLODING", AesKwWrapper::newKey, key -> new ExplodingWrapper()));
+                      "EXPLODING", AesGcmWrapper::newKey, key -> new ExplodingWrapper()));
       shell = new Shell(new Workspace(dataDir, kms), new PrintWriter(output));
       shell.execute("use EXPLODING");
 
@@ -564,12 +565,12 @@ class ShellTest {
     }
 
     @Override
-    public WrappedDek wrap(SecretKey dek) {
+    public WrappedDek wrap(SecretKey dek, byte[] aad) {
       throw new IllegalStateException("boom");
     }
 
     @Override
-    public SecretKey unwrap(WrappedDek w) {
+    public SecretKey unwrap(WrappedDek w, byte[] aad) {
       throw new IllegalStateException("boom");
     }
   }

@@ -15,6 +15,7 @@
  */
 package com.callibrity.cryptoagility.kms;
 
+import static java.nio.charset.StandardCharsets.UTF_8;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -25,7 +26,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.callibrity.cryptoagility.cipher.DataKeySpec;
 import com.callibrity.cryptoagility.envelope.UnknownAlgorithmException;
-import com.callibrity.cryptoagility.wrapper.AesKwWrapper;
+import com.callibrity.cryptoagility.wrapper.AesGcmWrapper;
 import com.callibrity.cryptoagility.wrapper.KeyWrapper;
 import com.callibrity.cryptoagility.wrapper.WrappedDek;
 import java.io.IOException;
@@ -47,6 +48,9 @@ import org.junit.jupiter.params.provider.MethodSource;
 
 @DisplayNameGeneration(DisplayNameGenerator.ReplaceUnderscores.class)
 class LocalKmsTest {
+
+  private static final byte[] CONTEXT = "record-0001".getBytes(UTF_8);
+  private static final byte[] OTHER_CONTEXT = "record-0002".getBytes(UTF_8);
 
   @TempDir Path dir;
 
@@ -70,11 +74,25 @@ class LocalKmsTest {
         throws GeneralSecurityException, IOException {
       String keyId = kms.createKey(algorithm).keyId();
 
-      DataKey dataKey = kms.generateDataKey(keyId, DataKeySpec.AES_256);
+      DataKey dataKey = kms.generateDataKey(keyId, DataKeySpec.AES_256, CONTEXT);
 
       assertEquals(algorithm, dataKey.algorithm());
       assertArrayEquals(
-          dataKey.key().getEncoded(), kms.decryptDataKey(keyId, dataKey.wrapped()).getEncoded());
+          dataKey.key().getEncoded(),
+          kms.decryptDataKey(keyId, dataKey.wrapped(), CONTEXT).getEncoded());
+    }
+
+    @ParameterizedTest
+    @MethodSource("com.callibrity.cryptoagility.kms.LocalKmsTest#algorithms")
+    void a_data_key_only_unwraps_with_the_context_it_was_wrapped_with(String algorithm)
+        throws GeneralSecurityException, IOException {
+      String keyId = kms.createKey(algorithm).keyId();
+
+      DataKey dataKey = kms.generateDataKey(keyId, DataKeySpec.AES_256, CONTEXT);
+
+      assertThrows(
+          GeneralSecurityException.class,
+          () -> kms.decryptDataKey(keyId, dataKey.wrapped(), OTHER_CONTEXT));
     }
 
     @ParameterizedTest
@@ -82,13 +100,13 @@ class LocalKmsTest {
     void its_keys_still_work_after_a_restart(String algorithm)
         throws GeneralSecurityException, IOException {
       String keyId = kms.createKey(algorithm).keyId();
-      DataKey dataKey = kms.generateDataKey(keyId, DataKeySpec.AES_256);
+      DataKey dataKey = kms.generateDataKey(keyId, DataKeySpec.AES_256, CONTEXT);
 
       var restarted = LocalKms.withStandardAlgorithms(dir);
 
       assertArrayEquals(
           dataKey.key().getEncoded(),
-          restarted.decryptDataKey(keyId, dataKey.wrapped()).getEncoded());
+          restarted.decryptDataKey(keyId, dataKey.wrapped(), CONTEXT).getEncoded());
     }
 
     @ParameterizedTest
@@ -108,7 +126,7 @@ class LocalKmsTest {
     void makes_the_size_and_kind_asked_for() throws GeneralSecurityException, IOException {
       String keyId = kms.createKey("ML-KEM-768").keyId();
 
-      SecretKey chacha = kms.generateDataKey(keyId, DataKeySpec.CHACHA20).key();
+      SecretKey chacha = kms.generateDataKey(keyId, DataKeySpec.CHACHA20, CONTEXT).key();
 
       assertEquals("ChaCha20", chacha.getAlgorithm());
       assertEquals(32, chacha.getEncoded().length);
@@ -118,8 +136,8 @@ class LocalKmsTest {
     void makes_a_different_key_every_time() throws GeneralSecurityException, IOException {
       String keyId = kms.createKey("ML-KEM-768").keyId();
 
-      byte[] first = kms.generateDataKey(keyId, DataKeySpec.AES_256).key().getEncoded();
-      byte[] second = kms.generateDataKey(keyId, DataKeySpec.AES_256).key().getEncoded();
+      byte[] first = kms.generateDataKey(keyId, DataKeySpec.AES_256, CONTEXT).key().getEncoded();
+      byte[] second = kms.generateDataKey(keyId, DataKeySpec.AES_256, CONTEXT).key().getEncoded();
 
       assertFalse(Arrays.equals(first, second));
     }
@@ -133,11 +151,35 @@ class LocalKmsTest {
         throws GeneralSecurityException, IOException {
       String rsa = kms.createKey("RSA-OAEP-3072").keyId();
       String mlKem = kms.createKey("ML-KEM-1024").keyId();
-      DataKey dataKey = kms.generateDataKey(rsa, DataKeySpec.AES_256);
+      DataKey dataKey = kms.generateDataKey(rsa, DataKeySpec.AES_256, CONTEXT);
 
-      WrappedDek moved = kms.reEncrypt(rsa, dataKey.wrapped(), mlKem);
+      WrappedDek moved = kms.reEncrypt(rsa, dataKey.wrapped(), CONTEXT, mlKem, OTHER_CONTEXT);
 
-      assertArrayEquals(dataKey.key().getEncoded(), kms.decryptDataKey(mlKem, moved).getEncoded());
+      assertArrayEquals(
+          dataKey.key().getEncoded(), kms.decryptDataKey(mlKem, moved, OTHER_CONTEXT).getEncoded());
+    }
+
+    @Test
+    void the_moved_key_is_bound_to_the_new_context_only()
+        throws GeneralSecurityException, IOException {
+      String rsa = kms.createKey("RSA-OAEP-3072").keyId();
+      String mlKem = kms.createKey("ML-KEM-1024").keyId();
+      DataKey dataKey = kms.generateDataKey(rsa, DataKeySpec.AES_256, CONTEXT);
+
+      WrappedDek moved = kms.reEncrypt(rsa, dataKey.wrapped(), CONTEXT, mlKem, OTHER_CONTEXT);
+
+      assertThrows(GeneralSecurityException.class, () -> kms.decryptDataKey(mlKem, moved, CONTEXT));
+    }
+
+    @Test
+    void the_wrong_old_context_is_refused() throws GeneralSecurityException, IOException {
+      String rsa = kms.createKey("RSA-OAEP-3072").keyId();
+      String mlKem = kms.createKey("ML-KEM-1024").keyId();
+      DataKey dataKey = kms.generateDataKey(rsa, DataKeySpec.AES_256, CONTEXT);
+
+      assertThrows(
+          GeneralSecurityException.class,
+          () -> kms.reEncrypt(rsa, dataKey.wrapped(), OTHER_CONTEXT, mlKem, OTHER_CONTEXT));
     }
   }
 
@@ -176,20 +218,23 @@ class LocalKmsTest {
     @Test
     void a_disabled_key_refuses_to_work_until_it_is_enabled_again()
         throws GeneralSecurityException, IOException {
-      String keyId = kms.createKey("AES-256-KW").keyId();
-      DataKey dataKey = kms.generateDataKey(keyId, DataKeySpec.AES_256);
+      String keyId = kms.createKey("AES-256-GCMKW").keyId();
+      DataKey dataKey = kms.generateDataKey(keyId, DataKeySpec.AES_256, CONTEXT);
 
       kms.disableKey(keyId);
 
       assertFalse(kms.describeKey(keyId).enabled());
-      assertThrows(KeyDisabledException.class, () -> kms.decryptDataKey(keyId, dataKey.wrapped()));
       assertThrows(
-          KeyDisabledException.class, () -> kms.generateDataKey(keyId, DataKeySpec.AES_256));
+          KeyDisabledException.class, () -> kms.decryptDataKey(keyId, dataKey.wrapped(), CONTEXT));
+      assertThrows(
+          KeyDisabledException.class,
+          () -> kms.generateDataKey(keyId, DataKeySpec.AES_256, CONTEXT));
 
       kms.enableKey(keyId);
 
       assertArrayEquals(
-          dataKey.key().getEncoded(), kms.decryptDataKey(keyId, dataKey.wrapped()).getEncoded());
+          dataKey.key().getEncoded(),
+          kms.decryptDataKey(keyId, dataKey.wrapped(), CONTEXT).getEncoded());
     }
 
     @Test
@@ -212,8 +257,8 @@ class LocalKmsTest {
 
       assertThrows(
           GeneralSecurityException.class,
-          () -> restarted.generateDataKey(damaged, DataKeySpec.AES_256));
-      assertNotNull(restarted.generateDataKey(healthy, DataKeySpec.AES_256));
+          () -> restarted.generateDataKey(damaged, DataKeySpec.AES_256, CONTEXT));
+      assertNotNull(restarted.generateDataKey(healthy, DataKeySpec.AES_256, CONTEXT));
     }
   }
 
@@ -230,7 +275,7 @@ class LocalKmsTest {
       var e =
           assertThrows(
               GeneralSecurityException.class,
-              () -> restarted.generateDataKey(keyId, DataKeySpec.AES_256));
+              () -> restarted.generateDataKey(keyId, DataKeySpec.AES_256, CONTEXT));
 
       assertTrue(e.getMessage().contains("no private field"));
     }
@@ -243,7 +288,7 @@ class LocalKmsTest {
     void offers_no_facts_rather_than_failing() throws GeneralSecurityException {
       kms.register(
           KeyTypes.secretKey(
-              "PLAIN", AesKwWrapper::newKey, key -> new PlainWrapper(new AesKwWrapper(key))));
+              "PLAIN", AesGcmWrapper::newKey, key -> new PlainWrapper(new AesGcmWrapper(key))));
 
       AlgorithmInfo info = kms.describeAlgorithm("PLAIN");
 
@@ -261,13 +306,13 @@ class LocalKmsTest {
     }
 
     @Override
-    public WrappedDek wrap(SecretKey dek) throws GeneralSecurityException {
-      return inner.wrap(dek);
+    public WrappedDek wrap(SecretKey dek, byte[] aad) throws GeneralSecurityException {
+      return inner.wrap(dek, aad);
     }
 
     @Override
-    public SecretKey unwrap(WrappedDek w) throws GeneralSecurityException {
-      return inner.unwrap(w);
+    public SecretKey unwrap(WrappedDek w, byte[] aad) throws GeneralSecurityException {
+      return inner.unwrap(w, aad);
     }
   }
 }

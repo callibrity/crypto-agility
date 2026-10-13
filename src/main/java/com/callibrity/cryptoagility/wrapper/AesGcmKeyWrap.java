@@ -25,6 +25,10 @@ import javax.crypto.SecretKey;
 /**
  * The second half of every KEM-based wrapper. A KEM hands you a shared secret, not a way to encrypt
  * a key you already have, so the data key is AES-GCM wrapped under a key derived from that secret.
+ * The symmetric wrapper uses it too, with its own key in place of the secret.
+ *
+ * <p>The associated data is authenticated along with the data key, so a wrapped key only unwraps
+ * for the same associated data it was wrapped with.
  */
 final class AesGcmKeyWrap {
 
@@ -36,9 +40,9 @@ final class AesGcmKeyWrap {
   /**
    * Wraps the data key and returns it together with the fields the KEM needs to find the key again.
    */
-  static WrappedDek wrap(SecretKey kek, SecretKey dek, Map<String, byte[]> kemFields)
+  static WrappedDek wrap(SecretKey kek, SecretKey dek, Map<String, byte[]> kemFields, byte[] aad)
       throws GeneralSecurityException {
-    Encrypted encrypted = AesGcm.wrap(kek, dek);
+    Encrypted encrypted = AesGcm.wrap(kek, dek, aad);
     Map<String, byte[]> fields = new LinkedHashMap<>();
     fields.put(WRAPPED_KEY, encrypted.ciphertext());
     fields.putAll(kemFields);
@@ -46,8 +50,8 @@ final class AesGcmKeyWrap {
     return new WrappedDek(fields);
   }
 
-  static SecretKey unwrap(SecretKey kek, WrappedDek w, String algId)
+  static SecretKey unwrap(SecretKey kek, WrappedDek w, String algId, byte[] aad)
       throws GeneralSecurityException {
-    return AesGcm.unwrap(kek, w.require(WRAP_NONCE, algId), w.require(WRAPPED_KEY, algId));
+    return AesGcm.unwrap(kek, w.require(WRAP_NONCE, algId), w.require(WRAPPED_KEY, algId), aad);
   }
 }

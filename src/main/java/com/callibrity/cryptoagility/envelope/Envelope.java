@@ -15,6 +15,8 @@
  */
 package com.callibrity.cryptoagility.envelope;
 
+import static java.nio.charset.StandardCharsets.UTF_8;
+
 import com.callibrity.cryptoagility.cipher.DataCipher;
 import com.callibrity.cryptoagility.cipher.DataCiphers;
 import com.callibrity.cryptoagility.cipher.Encrypted;
@@ -22,7 +24,9 @@ import com.callibrity.cryptoagility.kms.DataKey;
 import com.callibrity.cryptoagility.kms.KeyManagementService;
 import com.callibrity.cryptoagility.kms.KeyMetadata;
 import com.callibrity.cryptoagility.wrapper.WrappedDek;
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.nio.ByteBuffer;
 import java.security.GeneralSecurityException;
 import java.security.InvalidKeyException;
 import java.util.Arrays;
@@ -42,6 +46,11 @@ import javax.crypto.SecretKey;
  * <p>The names are what let old and new data live side by side: every envelope says how to open
  * itself, so nothing has to be migrated on the day the algorithm changes.
  *
+ * <p>The names are also authenticated. They are the encryption context the data key is wrapped
+ * with, so an envelope whose header has been changed fails as soon as the KMS tries to unwrap its
+ * data key, before the data is touched. The data itself is encrypted without them, which is what
+ * lets a rewrap change alg and kid without re-encrypting anything.
+ *
  * <p>Sealing and opening happen here, in the application. The KMS hands out a fresh data key for
  * each envelope and keeps the key that wraps it; the data itself never goes near the KMS.
  *
@@ -50,6 +59,8 @@ import javax.crypto.SecretKey;
  */
 public record Envelope(
     String alg, String kid, String enc, byte[] nonce, byte[] ciphertext, WrappedDek wrappedDek) {
+
+  private static final int CONTEXT_VERSION = 1;
 
   public Envelope {
     nonce = Objects.requireNonNull(nonce, "nonce").clone();
@@ -71,24 +82,23 @@ public record Envelope(
   public static Envelope seal(
       byte[] plaintext, KeyManagementService kms, String keyId, DataCipher cipher)
       throws GeneralSecurityException, IOException {
-    // The only line that involves the KEK.
-    DataKey dataKey = kms.generateDataKey(keyId, cipher.keySpec());
+    String alg = kms.describeKey(keyId).algorithm();
+    // The only line that involves the KEK. The data key is bound to the header it will be stored
+    // under.
+    DataKey dataKey =
+        kms.generateDataKey(keyId, cipher.keySpec(), encryptionContext(alg, keyId, cipher.algId()));
     // The data never goes to the KMS.
     Encrypted encrypted = cipher.encrypt(dataKey.key(), plaintext);
     // And the envelope says what it used.
     return new Envelope(
-        dataKey.algorithm(),
-        keyId,
-        cipher.algId(),
-        encrypted.nonce(),
-        encrypted.ciphertext(),
-        dataKey.wrapped());
+        alg, keyId, cipher.algId(), encrypted.nonce(), encrypted.ciphertext(), dataKey.wrapped());
   }
 
   /** Asks the KMS to unwrap the data key, then decrypts the data here. */
   public byte[] open(KeyManagementService kms) throws GeneralSecurityException, IOException {
     DataCipher cipher = DataCiphers.get(enc);
-    SecretKey dataKey = kms.decryptDataKey(checkedKeyId(kms), wrappedDek);
+    SecretKey dataKey =
+        kms.decryptDataKey(checkedKeyId(kms), wrappedDek, encryptionContext(alg, kid, enc));
     return cipher.decrypt(dataKey, nonce, ciphertext);
   }
 
@@ -98,9 +108,43 @@ public record Envelope(
    */
   public Envelope rewrap(KeyManagementService kms, String newKeyId)
       throws GeneralSecurityException, IOException {
-    WrappedDek moved = kms.reEncrypt(checkedKeyId(kms), wrappedDek, newKeyId);
     String algorithm = kms.describeKey(newKeyId).algorithm();
+    WrappedDek moved =
+        kms.reEncrypt(
+            checkedKeyId(kms),
+            wrappedDek,
+            encryptionContext(alg, kid, enc),
+            newKeyId,
+            encryptionContext(algorithm, newKeyId, enc));
     return new Envelope(algorithm, newKeyId, enc, nonce, ciphertext, moved);
+  }
+
+  /**
+   * The header as the bytes the data key is bound to: a format version, then alg, kid and enc in
+   * that order, each as a length and its UTF-8 bytes. A missing name is written as length -1, so it
+   * cannot be confused with an empty one.
+   */
+  static byte[] encryptionContext(String alg, String kid, String enc) {
+    var out = new ByteArrayOutputStream();
+    out.write(CONTEXT_VERSION);
+    writeName(out, alg);
+    writeName(out, kid);
+    writeName(out, enc);
+    return out.toByteArray();
+  }
+
+  private static void writeName(ByteArrayOutputStream out, String name) {
+    if (name == null) {
+      writeLength(out, -1);
+      return;
+    }
+    byte[] bytes = name.getBytes(UTF_8);
+    writeLength(out, bytes.length);
+    out.writeBytes(bytes);
+  }
+
+  private static void writeLength(ByteArrayOutputStream out, int length) {
+    out.writeBytes(ByteBuffer.allocate(Integer.BYTES).putInt(length).array());
   }
 
   // The key id says which key opens the data key. If the envelope also names an algorithm, it must

@@ -30,7 +30,12 @@ public interface KeyWrapper {
   /** The name written into every envelope this wrapper produces. */
   String algId();
 
-  WrappedDek wrap(SecretKey dek) throws GeneralSecurityException;
+  /**
+   * Wraps the data key, bound to the associated data: the wrapped key only unwraps for the same
+   * bytes.
+   */
+  WrappedDek wrap(SecretKey dek, byte[] aad) throws GeneralSecurityException;
 
-  SecretKey unwrap(WrappedDek w) throws GeneralSecurityException;
+  /** Unwraps the data key, failing unless the associated data is what it was wrapped with. */
+  SecretKey unwrap(WrappedDek w, byte[] aad) throws GeneralSecurityException;
 }

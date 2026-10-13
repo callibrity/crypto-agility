@@ -36,6 +36,7 @@ import java.io.IOException;
 import java.nio.file.Path;
 import java.security.GeneralSecurityException;
 import java.security.InvalidKeyException;
+import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import javax.crypto.AEADBadTagException;
@@ -218,6 +219,74 @@ class EnvelopeTest {
       var e = assertThrows(UnknownAlgorithmException.class, () -> odd.open(kms));
 
       assertTrue(e.getMessage().contains("ROT13"));
+    }
+  }
+
+  @Nested
+  class When_the_header_is_changed {
+
+    @Test
+    void a_different_data_cipher_is_refused_when_the_data_key_is_unwrapped()
+        throws GeneralSecurityException, IOException {
+      Envelope env = Envelope.seal(PLAINTEXT, kms, mlKemKey, AesGcm.INSTANCE);
+      byte[] claimsChaCha =
+          Envelope.encryptionContext(env.alg(), env.kid(), ChaCha20Poly1305.INSTANCE.algId());
+
+      assertThrows(
+          AEADBadTagException.class,
+          () -> kms.decryptDataKey(env.kid(), env.wrappedDek(), claimsChaCha));
+    }
+
+    @Test
+    void an_envelope_whose_alg_was_removed_no_longer_opens()
+        throws GeneralSecurityException, IOException {
+      for (String keyId : new String[] {rsaKey, mlKemKey}) {
+        Envelope env = Envelope.seal(PLAINTEXT, kms, keyId, AesGcm.INSTANCE);
+        var unlabelled =
+            new Envelope(
+                null, env.kid(), env.enc(), env.nonce(), env.ciphertext(), env.wrappedDek());
+
+        assertThrows(GeneralSecurityException.class, () -> unlabelled.open(kms));
+      }
+    }
+
+    @Test
+    void a_rewrapped_envelope_is_bound_to_its_new_header()
+        throws GeneralSecurityException, IOException {
+      Envelope before = Envelope.seal(PLAINTEXT, kms, rsaKey, AesGcm.INSTANCE);
+
+      Envelope after = before.rewrap(kms, mlKemKey);
+      var oldHeader =
+          new Envelope(
+              before.alg(),
+              before.kid(),
+              after.enc(),
+              after.nonce(),
+              after.ciphertext(),
+              after.wrappedDek());
+
+      assertArrayEquals(PLAINTEXT, after.open(kms));
+      assertThrows(GeneralSecurityException.class, () -> oldHeader.open(kms));
+    }
+  }
+
+  @Nested
+  class Its_encryption_context {
+
+    @Test
+    void tells_a_missing_name_from_an_empty_one() {
+      assertFalse(
+          Arrays.equals(
+              Envelope.encryptionContext(null, "key-000001", "AES-256-GCM"),
+              Envelope.encryptionContext("", "key-000001", "AES-256-GCM")));
+    }
+
+    @Test
+    void cannot_be_matched_by_moving_text_between_names() {
+      assertFalse(
+          Arrays.equals(
+              Envelope.encryptionContext("ab", "c", "AES-256-GCM"),
+              Envelope.encryptionContext("a", "bc", "AES-256-GCM")));
     }
   }
 

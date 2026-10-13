@@ -8,7 +8,7 @@ Demo code for the talk **"Crypto you can change: getting ready for post-quantum
 without a rewrite"** (James Carman, Momentum Dev Conference, Oct 15 2026).
 
 It shows crypto agility through envelope encryption against a key management
-service. Data whose keys are wrapped with RSA, elliptic-curve, AES key wrap,
+service. Data whose keys are wrapped with RSA, elliptic-curve, AES-GCM,
 ML-KEM, HQC and a hybrid sits side by side, all of it decrypts, and the calling
 code never changes.
 

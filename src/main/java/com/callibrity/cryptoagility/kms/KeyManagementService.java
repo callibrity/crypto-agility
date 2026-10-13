@@ -38,6 +38,11 @@ import javax.crypto.SecretKey;
  * <p>The data itself never goes to the KMS. It is encrypted and decrypted in the application, with
  * the data key.
  *
+ * <p>Every wrapped key is bound to an encryption context: bytes the caller chooses, authenticated
+ * along with the key but not secret. A wrapped key only decrypts when given the same context again,
+ * and reEncrypt takes the context to check and the context to bind to. (AWS has the same idea under
+ * the same name.)
+ *
  * <p>LocalKms is a stand-in that keeps its keys in files. A class talking to a real KMS would
  * implement this same interface, and nothing else would change.
  */
@@ -54,13 +59,18 @@ public interface KeyManagementService {
 
   List<KeyMetadata> listKeys() throws IOException;
 
-  DataKey generateDataKey(String keyId, DataKeySpec spec)
+  DataKey generateDataKey(String keyId, DataKeySpec spec, byte[] encryptionContext)
       throws GeneralSecurityException, IOException;
 
-  SecretKey decryptDataKey(String keyId, WrappedDek wrapped)
+  SecretKey decryptDataKey(String keyId, WrappedDek wrapped, byte[] encryptionContext)
       throws GeneralSecurityException, IOException;
 
-  WrappedDek reEncrypt(String keyId, WrappedDek wrapped, String newKeyId)
+  WrappedDek reEncrypt(
+      String keyId,
+      WrappedDek wrapped,
+      byte[] encryptionContext,
+      String newKeyId,
+      byte[] newEncryptionContext)
       throws GeneralSecurityException, IOException;
 
   void disableKey(String keyId) throws GeneralSecurityException, IOException;

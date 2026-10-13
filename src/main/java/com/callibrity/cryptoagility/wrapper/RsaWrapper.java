@@ -21,6 +21,7 @@ import java.security.GeneralSecurityException;
 import java.security.KeyPair;
 import java.security.KeyPairGenerator;
 import java.security.spec.MGF1ParameterSpec;
+import java.util.Objects;
 import javax.crypto.Cipher;
 import javax.crypto.SecretKey;
 import javax.crypto.spec.OAEPParameterSpec;
@@ -33,13 +34,6 @@ public final class RsaWrapper implements KeyWrapper, Inventoried {
 
   private static final String WRAPPED_KEY = "wrappedKey";
   private static final String TRANSFORMATION = "RSA/ECB/OAEPPadding";
-
-  // Spelled out, because the JDK's "OAEPWithSHA-256AndMGF1Padding" quietly uses SHA-1 inside
-  // MGF1, and other libraries read that name as SHA-256 throughout. An algorithm name that means
-  // different things to different readers is its own agility problem.
-  private static final OAEPParameterSpec OAEP_SHA256 =
-      new OAEPParameterSpec(
-          "SHA-256", "MGF1", MGF1ParameterSpec.SHA256, PSource.PSpecified.DEFAULT);
 
   private final KeyPair kp;
 
@@ -63,17 +57,29 @@ public final class RsaWrapper implements KeyWrapper, Inventoried {
   }
 
   @Override
-  public WrappedDek wrap(SecretKey dek) throws GeneralSecurityException {
+  public WrappedDek wrap(SecretKey dek, byte[] aad) throws GeneralSecurityException {
     var c = Cipher.getInstance(TRANSFORMATION);
-    c.init(Cipher.WRAP_MODE, kp.getPublic(), OAEP_SHA256);
+    c.init(Cipher.WRAP_MODE, kp.getPublic(), oaep(aad));
     return WrappedDek.of(WRAPPED_KEY, c.wrap(dek));
   }
 
   @Override
-  public SecretKey unwrap(WrappedDek w) throws GeneralSecurityException {
+  public SecretKey unwrap(WrappedDek w, byte[] aad) throws GeneralSecurityException {
     var c = Cipher.getInstance(TRANSFORMATION);
-    c.init(Cipher.UNWRAP_MODE, kp.getPrivate(), OAEP_SHA256);
+    c.init(Cipher.UNWRAP_MODE, kp.getPrivate(), oaep(aad));
     return (SecretKey) c.unwrap(w.require(WRAPPED_KEY, ALG_ID), "AES", Cipher.SECRET_KEY);
+  }
+
+  // Spelled out, because the JDK's "OAEPWithSHA-256AndMGF1Padding" quietly uses SHA-1 inside
+  // MGF1, and other libraries read that name as SHA-256 throughout. An algorithm name that means
+  // different things to different readers is its own agility problem. OAEP's label is its
+  // associated data: unwrapping with a different label fails.
+  private static OAEPParameterSpec oaep(byte[] aad) {
+    return new OAEPParameterSpec(
+        "SHA-256",
+        "MGF1",
+        MGF1ParameterSpec.SHA256,
+        new PSource.PSpecified(Objects.requireNonNull(aad, "aad")));
   }
 
   // Classical security of RSA-3072 is about 128 bits. A quantum computer running Shor's algorithm

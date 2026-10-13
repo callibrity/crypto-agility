@@ -91,7 +91,7 @@ it on your JVM, and how many keys and records use it. In short:
 |---|---|
 | `RSA-OAEP-3072` | Classical, quantum-vulnerable |
 | `ECDH-X25519` | Classical elliptic-curve, quantum-vulnerable |
-| `AES-256-KW` | Symmetric key wrap, as a cloud KMS does it; already quantum-safe |
+| `AES-256-GCMKW` | Symmetric key wrap with AES-GCM, as AWS KMS and Google Cloud KMS do it; already quantum-safe |
 | `ML-KEM-512`, `ML-KEM-768`, `ML-KEM-1024` | Post-quantum, lattice-based (FIPS 203), at NIST categories 1, 3 and 5 |
 | `X25519+ML-KEM-768` | Hybrid of a classical and a post-quantum algorithm |
 | `HQC-128`, `HQC-192`, `HQC-256` | Post-quantum, code-based, from BouncyCastle, at categories 1, 3 and 5 |
@@ -181,16 +181,21 @@ Try these on your own stored records. Most mean editing the files under
   ML-KEM-768, but key key-0208c8 is RSA-OAEP-3072".
 - **Change one character of a `ciphertext=` line.** AES-GCM is authenticated, so
   the read fails with a tag mismatch rather than returning garbage.
+- **Change an envelope's `enc` line** to the other data cipher, `AES-256-GCM` to
+  `ChaCha20-Poly1305` or back. The header is the encryption context the data key
+  was wrapped with, so the KMS refuses to unwrap the data key, and the read
+  fails before the data is even looked at.
 - **Retire an algorithm too early.** Write a record under RSA (if you retired
   it in experiment 3, `enable RSA-OAEP-3072` first), `use ML-KEM-768`, and
   `retire RSA-OAEP-3072` without rewrapping first. `retire` names the
   records it just stranded, and `read` shows them as unreadable. `enable
   RSA-OAEP-3072` brings them back; then do it in the right order: `rewrap`,
   then `retire RSA-OAEP-3072`.
-- **Remove an envelope's `alg` line.** It still reads, because the `kid` line
-  tells the KMS which key to use. But `list` now shows `(none)` and `cbom` counts
-  the record as unknown: the inventory has lost sight of it, and only someone
-  who can ask the KMS about every key could find it again.
+- **Remove an envelope's `alg` line.** The `kid` line still tells the KMS which
+  key to use, but the header no longer matches the one the data key was wrapped
+  with, so `read` reports the record as unreadable. `list` shows `(none)` and
+  `cbom` counts the record as unknown: the inventory has lost sight of it too.
+  Put the line back and it reads again.
 - **Remove an envelope's `kid` line.** Now nothing says which key opens the
   data key, and `read` reports it as unreadable.
 - **Ask for something unknown**, such as `use SIKE-p434`. The error points you
@@ -256,8 +261,8 @@ loop, which is why `use` offers ML-KEM-512, 768 and 1024 and HQC-128, 192 and
 
 ## 6. Read the hybrid, and the parts that were never at risk
 
-Before the hybrid, try `AES-256-KW` and read `wrapper/AesKwWrapper.java`. Here
-an AES-256 key wraps the AES-256 data key. That is what envelope encryption with
+Before the hybrid, try `AES-256-GCMKW` and read `wrapper/AesGcmWrapper.java`.
+Here an AES-256 key wraps the AES-256 data key with AES-GCM. That is what envelope encryption with
 a cloud KMS usually does: the wrapping key stays inside the KMS, and only the
 32-byte data key goes in and out. It is already quantum-safe, because a quantum
 computer only halves the strength of AES. The catch is that it is symmetric:
@@ -372,9 +377,10 @@ inventory lists it as unknown and counts its records as at risk.
   AWS KMS's GenerateDataKey, Decrypt and ReEncrypt, and nothing outside the
   `kms` package would need to change. It is also where you would find out which
   algorithms your KMS actually offers today.
-- Nothing authenticates the `alg` field. Real formats protect their headers;
-  JWE, for example, feeds the protected header into AES-GCM as associated data.
-  Try binding the header that way.
+- The header is bound to the data key, not to the data: see
+  `Envelope.encryptionContext`. JWE binds its protected header to the data
+  instead, feeding it into the data cipher as associated data. Work out why that
+  would make every `rewrap` re-encrypt the data.
 - Compare this skeleton with the real formats: the AWS Encryption SDK's message
   format, Tink's envelope AEAD, JWE (RFC 7516) and CMS (RFC 5652). Each has the
   same parts, and each names its algorithms in the envelope.

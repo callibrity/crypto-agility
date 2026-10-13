@@ -62,17 +62,17 @@ public final class EcdhWrapper implements KeyWrapper, Inventoried {
   }
 
   @Override
-  public WrappedDek wrap(SecretKey dek) throws GeneralSecurityException {
+  public WrappedDek wrap(SecretKey dek, byte[] aad) throws GeneralSecurityException {
     KEM.Encapsulated enc = kem.newEncapsulator(kp.getPublic()).encapsulate(0, 32, "AES");
-    return AesGcmKeyWrap.wrap(enc.key(), dek, Map.of(EPHEMERAL_KEY, enc.encapsulation()));
+    return AesGcmKeyWrap.wrap(enc.key(), dek, Map.of(EPHEMERAL_KEY, enc.encapsulation()), aad);
   }
 
   @Override
-  public SecretKey unwrap(WrappedDek w) throws GeneralSecurityException {
+  public SecretKey unwrap(WrappedDek w, byte[] aad) throws GeneralSecurityException {
     SecretKey kek =
         kem.newDecapsulator(kp.getPrivate())
             .decapsulate(w.require(EPHEMERAL_KEY, ALG_ID), 0, 32, "AES");
-    return AesGcmKeyWrap.unwrap(kek, w, ALG_ID);
+    return AesGcmKeyWrap.unwrap(kek, w, ALG_ID, aad);
   }
 
   // About 128 bits against a classical attacker. Shor's algorithm breaks elliptic curves too.

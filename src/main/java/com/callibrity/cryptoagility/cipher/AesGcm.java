@@ -18,6 +18,7 @@ package com.callibrity.cryptoagility.cipher;
 import com.callibrity.cryptoagility.cbom.AlgorithmFacts;
 import java.security.GeneralSecurityException;
 import java.util.Arrays;
+import java.util.Objects;
 import javax.crypto.Cipher;
 import javax.crypto.SecretKey;
 import javax.crypto.spec.GCMParameterSpec;
@@ -62,19 +63,39 @@ public final class AesGcm implements DataCipher {
     return c.doFinal(ciphertext);
   }
 
-  /** Wraps one key under another: the same cipher, used on a key instead of data. */
-  public static Encrypted wrap(SecretKey kek, SecretKey key) throws GeneralSecurityException {
+  /**
+   * Wraps one key under another: the same cipher, used on a key instead of data. The tag also
+   * covers the associated data, so unwrapping needs the same bytes again.
+   */
+  // The JDK's GCM does not take associated data in WRAP_MODE, so the key's bytes are encrypted
+  // directly, and the copy taken here is wiped.
+  public static Encrypted wrap(SecretKey kek, SecretKey key, byte[] aad)
+      throws GeneralSecurityException {
+    Objects.requireNonNull(aad, "aad");
     var c = Cipher.getInstance(TRANSFORMATION);
-    c.init(Cipher.WRAP_MODE, aes(kek)); // no nonce given, so the JDK picks a fresh one
-    byte[] wrapped = c.wrap(key);
-    return new Encrypted(c.getIV(), wrapped);
+    c.init(Cipher.ENCRYPT_MODE, aes(kek)); // no nonce given, so the JDK picks a fresh one
+    c.updateAAD(aad);
+    byte[] bytes = key.getEncoded();
+    try {
+      return new Encrypted(c.getIV(), c.doFinal(bytes));
+    } finally {
+      Arrays.fill(bytes, (byte) 0);
+    }
   }
 
-  public static SecretKey unwrap(SecretKey kek, byte[] nonce, byte[] wrapped)
+  /** Unwraps a key, failing unless the associated data is what it was wrapped with. */
+  public static SecretKey unwrap(SecretKey kek, byte[] nonce, byte[] wrapped, byte[] aad)
       throws GeneralSecurityException {
+    Objects.requireNonNull(aad, "aad");
     var c = Cipher.getInstance(TRANSFORMATION);
-    c.init(Cipher.UNWRAP_MODE, aes(kek), new GCMParameterSpec(TAG_BITS, nonce));
-    return (SecretKey) c.unwrap(wrapped, "AES", Cipher.SECRET_KEY);
+    c.init(Cipher.DECRYPT_MODE, aes(kek), new GCMParameterSpec(TAG_BITS, nonce));
+    c.updateAAD(aad);
+    byte[] bytes = c.doFinal(wrapped);
+    try {
+      return new SecretKeySpec(bytes, "AES");
+    } finally {
+      Arrays.fill(bytes, (byte) 0);
+    }
   }
 
   // A key's bytes are what matter; this labels them as an AES key whatever they were called before.
