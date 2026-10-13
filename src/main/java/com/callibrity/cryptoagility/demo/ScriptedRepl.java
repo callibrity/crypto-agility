@@ -82,7 +82,7 @@ final class ScriptedRepl {
       if (dumb) {
         try {
           reader.readLine(prompt(shell)); // prompt shows; press Enter to advance
-        } catch (EndOfFileException | UserInterruptException e) {
+        } catch (EndOfFileException | UserInterruptException _) {
           return;
         }
       } else {
@@ -105,7 +105,7 @@ final class ScriptedRepl {
   private static Terminal terminal() throws IOException {
     try {
       return TerminalBuilder.builder().build(); // real terminal: live prompt + single keypress
-    } catch (IOException e) {
+    } catch (IOException _) {
       return TerminalBuilder.builder().dumb(true).build();
     }
   }
@@ -121,8 +121,9 @@ final class ScriptedRepl {
     Attributes saved = terminal.enterRawMode();
     try {
       NonBlockingReader reader = terminal.reader();
-      while (reader.peek(1L) >= 0) { // discard keys pressed while the last command ran,
-        reader.read(); // so a stray press cannot skip the next step
+      while (reader.read(1L) >= 0) {
+        // discard keys pressed while the last command ran,
+        // so a stray press cannot skip the next step
       }
       PrintWriter out = terminal.writer();
       out.print(prompt); // cursor waits after the prompt
@@ -131,8 +132,8 @@ final class ScriptedRepl {
       if (ch < 0 || ch == 3 || ch == 4) {
         return false; // EOF, Ctrl-C, Ctrl-D
       }
-      while (reader.peek(5L) >= 0) { // drain the rest of a multi-byte key
-        reader.read();
+      while (reader.read(5L) >= 0) {
+        // drain the rest of a multi-byte key
       }
       return true;
     } finally {
@@ -173,7 +174,7 @@ final class ScriptedRepl {
   private static void sleep(long ms) {
     try {
       Thread.sleep(ms);
-    } catch (InterruptedException e) {
+    } catch (InterruptedException _) {
       Thread.currentThread().interrupt();
     }
   }
@@ -185,7 +186,7 @@ final class ScriptedRepl {
     try {
       int n = Integer.parseInt(value.strip());
       return n > 0 ? n : fallback;
-    } catch (NumberFormatException e) {
+    } catch (NumberFormatException _) {
       return fallback;
     }
   }

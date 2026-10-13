@@ -24,6 +24,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Stream;
 
@@ -80,7 +81,7 @@ public final class EnvelopeStore {
     fields.put(ALG, envelope.alg());
     fields.put(KID, envelope.kid());
     fields.put(ENC, envelope.enc());
-    fields.values().removeIf(value -> value == null);
+    fields.values().removeIf(Objects::isNull);
     fields.put(NONCE, KeyValueFile.encode(envelope.nonce()));
     fields.put(CIPHERTEXT, KeyValueFile.encode(envelope.ciphertext()));
     // Whatever the wrapper produced is stored as it comes. The store never needs to know the names.

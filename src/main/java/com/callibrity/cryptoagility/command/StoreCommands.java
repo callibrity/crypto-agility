@@ -89,43 +89,61 @@ public final class StoreCommands {
     int skipped = 0;
     long dataBytes = 0;
     for (Stored stored : ws.envelopes().all()) {
-      if (stored.damaged()) {
-        out.println(
-            Paint.red(String.format("  %s SKIPPED, damaged: %s", stored.id(), stored.problem())));
-        skipped++;
-        continue;
+      switch (rewrapOne(out, ws, stored, target)) {
+        case MOVED -> {
+          moved++;
+          dataBytes += stored.envelope().ciphertext().length;
+        }
+        case SKIPPED -> skipped++;
+        case ALREADY_THERE -> {
+          // counted as neither: there was nothing to do
+        }
       }
-      Envelope before = stored.envelope();
-      if (target.keyId().equals(before.kid())) {
-        out.printf("  %s already %s (%s)%n", stored.id(), before.alg(), before.kid());
-        continue;
-      }
-      Envelope after;
-      try {
-        after = before.rewrap(ws.kms(), target.keyId());
-      } catch (GeneralSecurityException e) {
-        out.println(
-            Paint.red(
-                String.format(
-                    "  %s SKIPPED, still %s: %s", stored.id(), before.alg(), e.getMessage())));
-        skipped++;
-        continue;
-      }
-      ws.envelopes().put(stored.id(), after);
-      out.printf(
-          "  %s %s (%s) -> %s%n",
-          stored.id(),
-          algOrNone(before),
-          before.kid(),
-          Paint.green(after.alg() + " (" + after.kid() + ")"));
-      moved++;
-      dataBytes += before.ciphertext().length;
     }
     out.printf(
         "%n  re-wrapped %d data key(s), re-encrypted 0 of %d ciphertext bytes%n", moved, dataBytes);
     if (skipped > 0) {
       out.printf("  %d record(s) could not be re-wrapped and were left as they were%n", skipped);
     }
+  }
+
+  private enum RewrapOutcome {
+    MOVED,
+    ALREADY_THERE,
+    SKIPPED
+  }
+
+  // Moves one envelope, or says why not. The line printed is the record's row in the report.
+  private static RewrapOutcome rewrapOne(
+      PrintWriter out, Workspace ws, Stored stored, KeyMetadata target) throws IOException {
+    if (stored.damaged()) {
+      out.println(
+          Paint.red(String.format("  %s SKIPPED, damaged: %s", stored.id(), stored.problem())));
+      return RewrapOutcome.SKIPPED;
+    }
+    Envelope before = stored.envelope();
+    if (target.keyId().equals(before.kid())) {
+      out.printf("  %s already %s (%s)%n", stored.id(), before.alg(), before.kid());
+      return RewrapOutcome.ALREADY_THERE;
+    }
+    Envelope after;
+    try {
+      after = before.rewrap(ws.kms(), target.keyId());
+    } catch (GeneralSecurityException e) {
+      out.println(
+          Paint.red(
+              String.format(
+                  "  %s SKIPPED, still %s: %s", stored.id(), before.alg(), e.getMessage())));
+      return RewrapOutcome.SKIPPED;
+    }
+    ws.envelopes().put(stored.id(), after);
+    out.printf(
+        "  %s %s (%s) -> %s%n",
+        stored.id(),
+        algOrNone(before),
+        before.kid(),
+        Paint.green(after.alg() + " (" + after.kid() + ")"));
+    return RewrapOutcome.MOVED;
   }
 
   /**
@@ -154,8 +172,8 @@ public final class StoreCommands {
   }
 
   /** Draws one stored envelope, or all of them when no record is named. Nothing is decrypted. */
-  public static void show(PrintWriter out, Workspace ws, String record) throws IOException {
-    List<Stored> chosen = select(ws, record);
+  public static void show(PrintWriter out, Workspace ws, String which) throws IOException {
+    List<Stored> chosen = select(ws, which);
     if (chosen.isEmpty()) {
       out.println("  nothing stored yet, try: write hello");
     }
@@ -210,21 +228,19 @@ public final class StoreCommands {
    * the one named by id ("record-0003"), by number ("3"), or by the path of an envelope file that
    * has been copied somewhere else.
    */
-  public static List<Stored> select(Workspace ws, String record) throws IOException {
-    if (record.isEmpty()) {
+  public static List<Stored> select(Workspace ws, String which) throws IOException {
+    if (which.isEmpty()) {
       return ws.envelopes().all();
     }
-    if (Files.isRegularFile(Path.of(record))) {
-      return List.of(new Stored(record, EnvelopeStore.load(Path.of(record))));
+    if (Files.isRegularFile(Path.of(which))) {
+      return List.of(new Stored(which, EnvelopeStore.load(Path.of(which))));
     }
     String id =
-        record.matches("\\d{1,9}")
-            ? String.format("record-%04d", Integer.parseInt(record))
-            : record;
+        which.matches("\\d{1,9}") ? String.format("record-%04d", Integer.parseInt(which)) : which;
     List<Stored> chosen =
         ws.envelopes().all().stream().filter(stored -> stored.id().equals(id)).toList();
     if (chosen.isEmpty()) {
-      throw new UsageException("no record called " + record + ", try list to see what is stored");
+      throw new UsageException("no record called " + which + ", try list to see what is stored");
     }
     return chosen;
   }

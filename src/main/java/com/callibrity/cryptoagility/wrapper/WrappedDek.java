@@ -72,11 +72,12 @@ public record WrappedDek(Map<String, byte[]> fields) {
   // compare bytes.
   @Override
   public boolean equals(Object other) {
-    if (!(other instanceof WrappedDek that) || !fields.keySet().equals(that.fields.keySet())) {
+    if (!(other instanceof WrappedDek(Map<String, byte[]> otherFields))
+        || !fields.keySet().equals(otherFields.keySet())) {
       return false;
     }
     for (Map.Entry<String, byte[]> field : fields.entrySet()) {
-      if (!Arrays.equals(field.getValue(), that.fields.get(field.getKey()))) {
+      if (!Arrays.equals(field.getValue(), otherFields.get(field.getKey()))) {
         return false;
       }
     }

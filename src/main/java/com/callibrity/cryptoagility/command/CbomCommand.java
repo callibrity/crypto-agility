@@ -289,10 +289,12 @@ public final class CbomCommand {
   /** "yes" in green, "NO" in red, or "unknown", padded for a table column. */
   static String quantumSafeCell(AlgorithmFacts facts, int width) {
     String format = "%-" + width + "s";
-    return facts == null
-        ? Paint.red(String.format(format, UNKNOWN))
-        : facts.quantumSafe()
-            ? Paint.green(String.format(format, "yes"))
-            : Paint.red(String.format(format, "NO"));
+    if (facts == null) {
+      return Paint.red(String.format(format, UNKNOWN));
+    }
+    if (facts.quantumSafe()) {
+      return Paint.green(String.format(format, "yes"));
+    }
+    return Paint.red(String.format(format, "NO"));
   }
 }

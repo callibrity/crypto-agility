@@ -16,6 +16,7 @@
 package com.callibrity.cryptoagility.wrapper;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import java.security.InvalidKeyException;
@@ -29,6 +30,16 @@ import org.junit.jupiter.api.Test;
 
 @DisplayNameGeneration(DisplayNameGenerator.ReplaceUnderscores.class)
 class WrappedDekTest {
+
+  @Nested
+  class Comparing {
+
+    @Test
+    void is_never_equal_to_something_else() {
+      Object somethingElse = "wrappedKey";
+      assertNotEquals(WrappedDek.of("wrappedKey", new byte[] {1}), somethingElse);
+    }
+  }
 
   @Nested
   class Guarding_its_bytes {

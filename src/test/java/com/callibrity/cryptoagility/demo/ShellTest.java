@@ -162,6 +162,29 @@ class ShellTest {
     }
 
     @Test
+    void drops_single_quotes_that_surround_the_whole_text()
+        throws IOException, GeneralSecurityException {
+      shell.execute("write 'customer record #1'");
+
+      assertEquals("customer record #1", plaintextOf(0));
+    }
+
+    @Test
+    void keeps_quotes_that_do_not_surround_the_whole_text()
+        throws IOException, GeneralSecurityException {
+      shell.execute("write \"customer record #1'");
+
+      assertEquals("\"customer record #1'", plaintextOf(0));
+    }
+
+    @Test
+    void keeps_a_lone_quote_mark() throws IOException, GeneralSecurityException {
+      shell.execute("write \"");
+
+      assertEquals("\"", plaintextOf(0));
+    }
+
+    @Test
     void stores_nothing_when_no_text_is_given() throws IOException {
       shell.execute("write");
 
@@ -173,7 +196,7 @@ class ShellTest {
   class When_completing_what_is_typed {
 
     @Test
-    void offers_every_registered_algorithm() throws GeneralSecurityException, IOException {
+    void offers_every_registered_algorithm() {
       assertTrue(shell.algorithms().containsAll(ws.kms().algorithms()));
       assertTrue(shell.algorithms().contains("ChaCha20-Poly1305"));
     }
@@ -186,6 +209,12 @@ class ShellTest {
               .containsAll(
                   List.of(
                       "ML-KEM-512", "ML-KEM-768", "ML-KEM-1024", "HQC-128", "HQC-192", "HQC-256")));
+    }
+
+    @Test
+    void offers_only_wrap_algorithms_to_retire_and_enable() {
+      assertEquals(ws.kms().algorithms(), shell.wrapAlgorithms());
+      assertFalse(shell.wrapAlgorithms().contains("ChaCha20-Poly1305"));
     }
 
     @Test
@@ -235,12 +264,23 @@ class ShellTest {
     void every_command_that_reads_the_store_keeps_working() throws IOException {
       damage("record-0001", "ciphertext=", "ciphertext=!!!");
 
-      for (String command : List.of("list", "show", "cbom", "rewrap", "algorithms")) {
+      for (String command : List.of("list", "show", "keys", "cbom", "rewrap", "algorithms")) {
         shell.execute(command);
       }
 
       assertFalse(output.toString().contains("error:"), output.toString());
       assertTrue(output.toString().contains("damaged"));
+    }
+
+    @Test
+    void retire_names_only_the_readable_records_it_strands() throws IOException {
+      damage("record-0001", "ciphertext=", "ciphertext=!!!");
+      shell.execute("use ML-KEM-768");
+
+      shell.execute("retire RSA-OAEP-3072");
+
+      assertTrue(output.toString().contains("1 record(s) still depend on them"), output.toString());
+      assertTrue(output.toString().contains("unreadable: record-0002"));
     }
 
     @Test
@@ -397,7 +437,7 @@ class ShellTest {
     }
 
     @Test
-    void its_keys_are_disabled_in_the_kms() throws GeneralSecurityException, IOException {
+    void its_keys_are_disabled_in_the_kms() throws IOException {
       shell.execute("write customer record #1");
       shell.execute("use ML-KEM-768");
 
@@ -485,6 +525,39 @@ class ShellTest {
       shell.execute("algs");
 
       assertEquals(2, output.toString().split("Key wrapping", -1).length - 1);
+    }
+  }
+
+  @Nested
+  class When_asking_for_help {
+
+    @Test
+    void both_names_list_the_commands() {
+      shell.execute("help");
+      shell.execute("?");
+
+      assertEquals(2, output.toString().split("use \\[algorithm]", -1).length - 1);
+    }
+  }
+
+  @Nested
+  class When_an_algorithm_cannot_describe_itself {
+
+    @Test
+    void algorithms_lists_it_as_unknown_rather_than_failing() {
+      var kms =
+          LocalKms.withStandardAlgorithms(dataDir.resolve("kms"))
+              .register(
+                  KeyTypes.secretKey(
+                      "EXPLODING", AesGcmWrapper::newKey, key -> new ExplodingWrapper()));
+      shell = new Shell(new Workspace(dataDir, kms), new PrintWriter(output));
+
+      shell.execute("algorithms");
+
+      String row =
+          output.toString().lines().filter(line -> line.contains("EXPLODING")).findFirst().get();
+      assertTrue(row.contains("unknown"), row);
+      assertFalse(output.toString().contains("error:"));
     }
   }
 

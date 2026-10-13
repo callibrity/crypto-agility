@@ -40,6 +40,8 @@ public final class AesGcmWrapper implements KeyWrapper, Inventoried {
 
   public static final String ALG_ID = "AES-256-GCMKW";
 
+  private static final SecureRandom RNG = new SecureRandom();
+
   private final SecretKey kek;
 
   public AesGcmWrapper() {
@@ -53,7 +55,7 @@ public final class AesGcmWrapper implements KeyWrapper, Inventoried {
   public static SecretKey newKey() {
     byte[] key = new byte[32];
     try {
-      new SecureRandom().nextBytes(key);
+      RNG.nextBytes(key);
       return new SecretKeySpec(key, "AES");
     } finally {
       // SecretKeySpec keeps its own copy; this one is wiped.

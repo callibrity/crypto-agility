@@ -71,7 +71,7 @@ public final class RetireCommand {
   }
 
   private static List<KeyMetadata> keysFor(Workspace ws, String algorithm, boolean enabled)
-      throws GeneralSecurityException, IOException {
+      throws IOException {
     if (!ws.kms().algorithms().contains(algorithm)) {
       throw new UsageException("the KMS has no algorithm " + algorithm);
     }

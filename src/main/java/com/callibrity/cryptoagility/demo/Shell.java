@@ -105,7 +105,9 @@ final class Shell {
     String argument = parts.length > 1 ? unquote(parts[1].strip()) : "";
     try {
       switch (command) {
-        case "" -> {}
+        case "" -> {
+          // a blank line does nothing
+        }
         case "use" -> use(argument);
         case "algorithms", "algs" -> AlgorithmsCommand.run(out, ws, current, cipher);
         case "write" ->
@@ -155,7 +157,7 @@ final class Shell {
   List<String> recordIds() {
     try {
       return ws.envelopes().all().stream().map(Stored::id).toList();
-    } catch (IOException e) {
+    } catch (IOException _) {
       return List.of();
     }
   }

@@ -43,9 +43,9 @@ public record Encrypted(byte[] nonce, byte[] ciphertext) {
 
   @Override
   public boolean equals(Object other) {
-    return other instanceof Encrypted that
-        && Arrays.equals(nonce, that.nonce)
-        && Arrays.equals(ciphertext, that.ciphertext);
+    return other instanceof Encrypted(byte[] otherNonce, byte[] otherCiphertext)
+        && Arrays.equals(nonce, otherNonce)
+        && Arrays.equals(ciphertext, otherCiphertext);
   }
 
   @Override

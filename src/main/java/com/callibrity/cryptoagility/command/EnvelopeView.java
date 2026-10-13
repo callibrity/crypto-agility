@@ -74,7 +74,7 @@ public final class EnvelopeView {
             : "opened by the " + alg + " key";
     out.append(envelopeLine(boxTop("wrapped data key", opener, boxWidth), width, Paint::yellow));
     for (Map.Entry<String, byte[]> field : wrap.entrySet()) {
-      out.append(row(field.getKey(), field.getValue(), nameWidth, width, Paint::yellow));
+      out.append(row(field.getKey(), field.getValue(), nameWidth, Paint::yellow));
     }
     int arrowAt = boxWidth / 2;
     out.append(
@@ -89,8 +89,8 @@ public final class EnvelopeView {
             boxTop("data", "encrypted with " + fit(orNone(env.enc()), MAX_ALG_WIDTH), boxWidth),
             width,
             Paint::cyan));
-    out.append(row("nonce", env.nonce(), nameWidth, width, Paint::cyan));
-    out.append(row("ciphertext", env.ciphertext(), nameWidth, width, Paint::cyan));
+    out.append(row("nonce", env.nonce(), nameWidth, Paint::cyan));
+    out.append(row("ciphertext", env.ciphertext(), nameWidth, Paint::cyan));
     String sizes =
         (env.ciphertext().length - TAG_BYTES) + " bytes of data + " + TAG_BYTES + "-byte tag";
     String note = " ".repeat(nameWidth + 1) + sizes;
@@ -110,13 +110,15 @@ public final class EnvelopeView {
 
   /** One field: its name, its size, a bar in proportion to the size, and its first few bytes. */
   private static String row(
-      String name, byte[] value, int nameWidth, int width, UnaryOperator<String> colour) {
+      String name, byte[] value, int nameWidth, UnaryOperator<String> colour) {
     String bar = bar(value.length);
     String preview = preview(value);
     return "│ "
         + colour.apply("│")
         + "  "
-        + String.format("%-" + nameWidth + "s %5d bytes  ", name, value.length)
+        + name
+        + " ".repeat(nameWidth - name.length())
+        + String.format(" %5d bytes  ", value.length)
         + colour.apply(bar)
         + " ".repeat(BAR_WIDTH - bar.length())
         + "  "

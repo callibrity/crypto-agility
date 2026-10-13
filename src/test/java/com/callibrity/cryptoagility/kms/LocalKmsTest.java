@@ -34,6 +34,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.security.GeneralSecurityException;
 import java.security.Security;
+import java.time.Instant;
 import java.util.Arrays;
 import java.util.List;
 import javax.crypto.SecretKey;
@@ -235,6 +236,20 @@ class LocalKmsTest {
       assertArrayEquals(
           dataKey.key().getEncoded(),
           kms.decryptDataKey(keyId, dataKey.wrapped(), CONTEXT).getEncoded());
+    }
+
+    @Test
+    void a_key_file_with_no_creation_time_is_listed_first()
+        throws GeneralSecurityException, IOException {
+      String older = kms.createKey("RSA-OAEP-3072").keyId();
+      String undated = kms.createKey("ML-KEM-768").keyId();
+      Path file = dir.resolve(undated + ".key");
+      Files.writeString(file, Files.readString(file).replaceFirst("created=[^\\n]*\\n", ""));
+
+      List<KeyMetadata> keys = LocalKms.withStandardAlgorithms(dir).listKeys();
+
+      assertEquals(List.of(undated, older), keys.stream().map(KeyMetadata::keyId).toList());
+      assertEquals(Instant.EPOCH, keys.getFirst().created());
     }
 
     @Test

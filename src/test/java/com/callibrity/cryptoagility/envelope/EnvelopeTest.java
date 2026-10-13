@@ -344,6 +344,35 @@ class EnvelopeTest {
     }
 
     @Test
+    void any_one_part_that_differs_makes_a_different_envelope() {
+      Envelope base = envelope("ML-KEM-768", (byte) 5);
+      byte[] nonce = base.nonce();
+      byte[] ciphertext = base.ciphertext();
+      WrappedDek dek = base.wrappedDek();
+
+      assertNotEquals(
+          base, new Envelope("ML-KEM-768", "key-000002", "AES-256-GCM", nonce, ciphertext, dek));
+      assertNotEquals(
+          base,
+          new Envelope("ML-KEM-768", "key-000001", "ChaCha20-Poly1305", nonce, ciphertext, dek));
+      assertNotEquals(
+          base,
+          new Envelope(
+              "ML-KEM-768", "key-000001", "AES-256-GCM", new byte[] {9, 9}, ciphertext, dek));
+      assertNotEquals(
+          base,
+          new Envelope(
+              "ML-KEM-768",
+              "key-000001",
+              "AES-256-GCM",
+              nonce,
+              ciphertext,
+              WrappedDek.of("wrappedKey", new byte[] {8, 8})));
+      Object somethingElse = "not an envelope";
+      assertNotEquals(base, somethingElse);
+    }
+
+    @Test
     void a_different_header_or_different_bytes_make_a_different_envelope() {
       assertNotEquals(envelope("ML-KEM-768", (byte) 5), envelope("RSA-OAEP-3072", (byte) 5));
       assertNotEquals(envelope("ML-KEM-768", (byte) 5), envelope("ML-KEM-768", (byte) 6));

@@ -41,7 +41,7 @@ final class Providers {
         names[i] = lookups[i].name();
       }
       return Arrays.stream(names).distinct().collect(Collectors.joining("+"));
-    } catch (GeneralSecurityException e) {
+    } catch (GeneralSecurityException _) {
       return "unavailable";
     }
   }

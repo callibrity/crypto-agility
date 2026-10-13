@@ -1,6 +1,8 @@
 # Crypto agility
 
 [![CI](https://github.com/callibrity/crypto-agility/actions/workflows/ci.yml/badge.svg)](https://github.com/callibrity/crypto-agility/actions/workflows/ci.yml)
+[![Quality Gate Status](https://sonarcloud.io/api/project_badges/measure?project=callibrity_crypto-agility&metric=alert_status)](https://sonarcloud.io/summary/new_code?id=callibrity_crypto-agility)
+[![Coverage](https://sonarcloud.io/api/project_badges/measure?project=callibrity_crypto-agility&metric=coverage)](https://sonarcloud.io/summary/new_code?id=callibrity_crypto-agility)
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
 [![Java](https://img.shields.io/badge/Java-25%2B-orange.svg)](https://openjdk.org/projects/jdk/25/)
 

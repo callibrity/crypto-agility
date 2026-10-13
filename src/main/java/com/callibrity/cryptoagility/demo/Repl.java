@@ -69,9 +69,9 @@ final class Repl {
       String line;
       try {
         line = reader.readLine(prompt(shell, terminal));
-      } catch (UserInterruptException e) {
+      } catch (UserInterruptException _) {
         continue; // Ctrl-C abandons the line
-      } catch (EndOfFileException e) {
+      } catch (EndOfFileException _) {
         return; // Ctrl-D leaves
       }
       if (!shell.execute(line)) {

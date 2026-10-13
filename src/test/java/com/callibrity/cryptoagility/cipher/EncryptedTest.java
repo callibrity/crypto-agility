@@ -82,6 +82,11 @@ class EncryptedTest {
       assertNotEquals(
           new Encrypted(new byte[] {1}, new byte[] {2}),
           new Encrypted(new byte[] {1}, new byte[] {9}));
+      assertNotEquals(
+          new Encrypted(new byte[] {1}, new byte[] {2}),
+          new Encrypted(new byte[] {9}, new byte[] {2}));
+      Object somethingElse = "not encrypted";
+      assertNotEquals(new Encrypted(new byte[] {1}, new byte[] {2}), somethingElse);
     }
   }
 

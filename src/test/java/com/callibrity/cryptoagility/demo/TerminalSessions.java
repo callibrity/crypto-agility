@@ -21,6 +21,7 @@ import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.OutputStream;
 import java.util.regex.Pattern;
 import org.jline.terminal.Terminal;
 import org.jline.terminal.TerminalBuilder;
@@ -50,13 +51,40 @@ final class TerminalSessions {
    * the next prompt is showing.
    */
   static Terminal full(String keys, ByteArrayOutputStream screen) throws IOException {
+    var watched = new WatchedScreen(screen);
     return TerminalBuilder.builder()
         .system(false)
         .ffm(false)
         .jni(false)
-        .streams(new Typist(keys, screen), screen)
+        .streams(new Typist(keys, watched), watched)
         .type("xterm")
         .build();
+  }
+
+  // Passes everything drawn through to the screen, and wakes anyone waiting to see it.
+  private static final class WatchedScreen extends OutputStream {
+
+    private final ByteArrayOutputStream screen;
+
+    WatchedScreen(ByteArrayOutputStream screen) {
+      this.screen = screen;
+    }
+
+    @Override
+    public synchronized void write(int b) {
+      screen.write(b);
+      notifyAll();
+    }
+
+    @Override
+    public synchronized void write(byte[] b, int off, int len) {
+      screen.write(b, off, len);
+      notifyAll();
+    }
+
+    synchronized String text() {
+      return TerminalSessions.text(screen);
+    }
   }
 
   // Presses key n only after the screen shows its n-th prompt, then runs out.
@@ -66,10 +94,10 @@ final class TerminalSessions {
     private static final long PATIENCE_MILLIS = 10_000;
 
     private final String keys;
-    private final ByteArrayOutputStream screen;
+    private final WatchedScreen screen;
     private int pressed;
 
-    Typist(String keys, ByteArrayOutputStream screen) {
+    Typist(String keys, WatchedScreen screen) {
       this.keys = keys;
       this.screen = screen;
     }
@@ -80,23 +108,26 @@ final class TerminalSessions {
         return -1;
       }
       long deadline = System.currentTimeMillis() + PATIENCE_MILLIS;
-      while (prompts() <= pressed) {
-        if (System.currentTimeMillis() > deadline) {
-          throw new IOException("no prompt appeared for key " + (pressed + 1));
+      synchronized (screen) {
+        while (prompts() <= pressed) {
+          long left = deadline - System.currentTimeMillis();
+          if (left <= 0) {
+            throw new IOException("no prompt appeared for key " + (pressed + 1));
+          }
+          awaitDrawing(left);
         }
-        pause();
       }
       return keys.charAt(pressed++);
     }
 
     private int prompts() {
-      String shown = text(screen);
-      return shown.split(Pattern.quote(PROMPT), -1).length - 1;
+      return screen.text().split(Pattern.quote(PROMPT), -1).length - 1;
     }
 
-    private static void pause() throws IOException {
+    // Waits, holding the screen's lock, until something more is drawn or the time is up.
+    private void awaitDrawing(long millis) throws IOException {
       try {
-        Thread.sleep(10);
+        screen.wait(millis);
       } catch (InterruptedException e) {
         Thread.currentThread().interrupt();
         throw new IOException("interrupted while waiting for a prompt", e);

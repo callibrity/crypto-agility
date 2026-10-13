@@ -34,6 +34,8 @@ import javax.crypto.spec.SecretKeySpec;
  */
 public final class KeyTypes {
 
+  private static final String KEY_ALGORITHM = "keyAlgorithm";
+
   /** Makes a new key pair. */
   @FunctionalInterface
   public interface KeyPairSource {
@@ -122,14 +124,14 @@ public final class KeyTypes {
       public Map<String, String> newKeyMaterial() throws GeneralSecurityException {
         SecretKey key = source.generate();
         Map<String, String> material = new LinkedHashMap<>();
-        material.put("keyAlgorithm", key.getAlgorithm());
+        material.put(KEY_ALGORITHM, key.getAlgorithm());
         material.put("key", encodeAndWipe(key.getEncoded()));
         return material;
       }
 
       @Override
       public KeyWrapper wrapper(Map<String, String> material) throws GeneralSecurityException {
-        String keyAlgorithm = field(material, "keyAlgorithm");
+        String keyAlgorithm = field(material, KEY_ALGORITHM);
         byte[] key = decode(material, "key");
         try {
           return engine.wrapper(new SecretKeySpec(key, keyAlgorithm));
@@ -141,7 +143,7 @@ public final class KeyTypes {
   }
 
   private static void putKeyPair(Map<String, String> material, String prefix, KeyPair keyPair) {
-    material.put(prefix + "keyAlgorithm", keyPair.getPublic().getAlgorithm());
+    material.put(prefix + KEY_ALGORITHM, keyPair.getPublic().getAlgorithm());
     material.put(
         prefix + "public", Base64.getEncoder().encodeToString(keyPair.getPublic().getEncoded()));
     material.put(prefix + "private", encodeAndWipe(keyPair.getPrivate().getEncoded()));
@@ -149,7 +151,7 @@ public final class KeyTypes {
 
   private static KeyPair keyPair(Map<String, String> material, String prefix)
       throws GeneralSecurityException {
-    var factory = KeyFactory.getInstance(field(material, prefix + "keyAlgorithm"));
+    var factory = KeyFactory.getInstance(field(material, prefix + KEY_ALGORITHM));
     var publicKey =
         factory.generatePublic(new X509EncodedKeySpec(decode(material, prefix + "public")));
     byte[] privateKey = decode(material, prefix + "private");
