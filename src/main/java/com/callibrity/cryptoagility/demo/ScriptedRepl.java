@@ -86,9 +86,7 @@ final class ScriptedRepl {
           return;
         }
       } else {
-        out.print(prompt(shell)); // prompt shows and waits, cursor after it
-        out.flush();
-        if (!awaitKey(terminal)) { // one keypress, not echoed
+        if (!awaitKey(terminal, prompt(shell))) { // prompt shows; one keypress, not echoed
           out.println();
           out.flush();
           return;
@@ -112,17 +110,23 @@ final class ScriptedRepl {
     }
   }
 
-  // Waits for one keypress without echoing it, so the prompt keeps its line.
-  // A single key can arrive as several bytes (arrow keys send an escape
-  // sequence like ESC [ A), so after the first byte we drain the rest; one
-  // physical keypress always advances exactly one command.
-  private static boolean awaitKey(Terminal terminal) throws IOException {
+  // Shows the prompt and waits for one keypress without echoing it, so the
+  // prompt keeps its line. Keys pressed while the last command ran are
+  // discarded before the prompt shows, never after: once the prompt is on
+  // screen, the next key counts. A single key can arrive as several bytes
+  // (arrow keys send an escape sequence like ESC [ A), so after the first byte
+  // we drain the rest; one physical keypress always advances exactly one
+  // command.
+  private static boolean awaitKey(Terminal terminal, String prompt) throws IOException {
     Attributes saved = terminal.enterRawMode();
     try {
       NonBlockingReader reader = terminal.reader();
       while (reader.peek(1L) >= 0) { // discard keys pressed while the last command ran,
         reader.read(); // so a stray press cannot skip the next step
       }
+      PrintWriter out = terminal.writer();
+      out.print(prompt); // cursor waits after the prompt
+      out.flush();
       int ch = reader.read(); // first byte of the keypress
       if (ch < 0 || ch == 3 || ch == 4) {
         return false; // EOF, Ctrl-C, Ctrl-D
