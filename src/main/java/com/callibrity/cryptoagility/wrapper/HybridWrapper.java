@@ -52,7 +52,7 @@ public final class HybridWrapper implements KeyWrapper, Inventoried {
 
   public static final String ALG_ID = "X25519+ML-KEM-768";
 
-  private static final String X25519 = "X25519";
+  private static final String X25519_ALGORITHM = "X25519";
   private static final String EPHEMERAL_KEY = "ephemeralKey";
   private static final String KEM_CT = "kemCt";
   private static final byte[] KDF_LABEL = "crypto-agility-demo hybrid wrap v1".getBytes(UTF_8);
@@ -74,7 +74,7 @@ public final class HybridWrapper implements KeyWrapper, Inventoried {
   }
 
   public static KeyPair newX25519KeyPair() throws GeneralSecurityException {
-    return KeyPairGenerator.getInstance(X25519).generateKeyPair();
+    return KeyPairGenerator.getInstance(X25519_ALGORITHM).generateKeyPair();
   }
 
   @Override
@@ -111,7 +111,8 @@ public final class HybridWrapper implements KeyWrapper, Inventoried {
     byte[] mlKemCt = w.require(KEM_CT, algId());
 
     PublicKey ephemeral =
-        KeyFactory.getInstance(X25519).generatePublic(new X509EncodedKeySpec(ephemeralPub));
+        KeyFactory.getInstance(X25519_ALGORITHM)
+            .generatePublic(new X509EncodedKeySpec(ephemeralPub));
     SecretKey pqSecret = kem.newDecapsulator(mlKem.getPrivate()).decapsulate(mlKemCt);
 
     return AesGcmKeyWrap.unwrap(
@@ -122,7 +123,7 @@ public final class HybridWrapper implements KeyWrapper, Inventoried {
   }
 
   private static byte[] agree(PrivateKey mine, PublicKey theirs) throws GeneralSecurityException {
-    var ka = KeyAgreement.getInstance(X25519);
+    var ka = KeyAgreement.getInstance(X25519_ALGORITHM);
     ka.init(mine);
     ka.doPhase(theirs, true);
     return ka.generateSecret();
@@ -165,7 +166,7 @@ public final class HybridWrapper implements KeyWrapper, Inventoried {
   public String provider() {
     return Providers.names(
         () -> kem.newEncapsulator(mlKem.getPublic()).providerName(),
-        () -> KeyAgreement.getInstance(X25519).getProvider().getName(),
+        () -> KeyAgreement.getInstance(X25519_ALGORITHM).getProvider().getName(),
         () -> KDF.getInstance("HKDF-SHA256").getProviderName());
   }
 }
