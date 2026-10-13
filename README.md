@@ -126,7 +126,7 @@ Everything is under `src/main/java/com/callibrity/cryptoagility/`.
 |---|---|
 | `envelope` | The `Envelope`, which can `seal` data under a KMS key, `open` itself, and `rewrap` itself onto another key |
 | `kms` | `KeyManagementService`, shaped like AWS KMS or Google Cloud KMS, and `LocalKms`, a stand-in that keeps its keys in files |
-| `wrapper` | The key-wrapping seam (`KeyWrapper`) and one class per algorithm: `RsaWrapper` and `EcdhWrapper` (classical), `AesKwWrapper` (symmetric, as a cloud KMS does it), `MlKemWrapper` and `HqcWrapper` (post-quantum), and `HybridWrapper` |
+| `wrapper` | The key-wrapping seam (`KeyWrapper`) and one class per algorithm: `RsaWrapper` and `EcdhWrapper` (classical), `AesGcmWrapper` (symmetric, as a cloud KMS does it), `MlKemWrapper` and `HqcWrapper` (post-quantum), and `HybridWrapper` |
 | `cipher` | The data-encryption seam (`DataCipher`) and its two implementations, `AesGcm` and `ChaCha20Poly1305` |
 | `store` | Envelopes kept as small text files under `data/envelopes` |
 | `cbom` | `CycloneDx`: the slice of the CycloneDX 1.6 format a cryptographic bill of materials needs, as records |
@@ -140,8 +140,8 @@ Swap the implementation, never the call sites.
 ```java
 public interface KeyWrapper {
   String algId();
-  WrappedDek wrap(SecretKey dek) throws GeneralSecurityException;
-  SecretKey unwrap(WrappedDek w) throws GeneralSecurityException;
+  WrappedDek wrap(SecretKey dek, byte[] aad) throws GeneralSecurityException;
+  SecretKey unwrap(WrappedDek w, byte[] aad) throws GeneralSecurityException;
 }
 ```
 
@@ -160,23 +160,27 @@ configuration, and the envelope records both.
 This is `Envelope.seal`, the one place data gets encrypted:
 
 ```java
-// The only line that involves the KEK.
-DataKey dataKey = kms.generateDataKey(keyId, cipher.keySpec());
+String alg = kms.describeKey(keyId).algorithm();
+// The only line that involves the KEK. The data key is bound to the header it will be stored
+// under.
+DataKey dataKey =
+    kms.generateDataKey(keyId, cipher.keySpec(), encryptionContext(alg, keyId, cipher.algId()));
 // The data never goes to the KMS.
 Encrypted encrypted = cipher.encrypt(dataKey.key(), plaintext);
 // And the envelope says what it used.
 return new Envelope(
-    dataKey.algorithm(),
-    keyId,
-    cipher.algId(),
-    encrypted.nonce(),
-    encrypted.ciphertext(),
-    dataKey.wrapped());
+    alg, keyId, cipher.algId(), encrypted.nonce(), encrypted.ciphertext(), dataKey.wrapped());
 ```
 
 The application never holds a KEK. It names a KMS key and gets back a fresh data
 key twice over: in plaintext to encrypt with once, and wrapped to store. That is
 how `GenerateDataKey` works in AWS KMS.
+
+The header the envelope will carry (`alg`, `kid` and `enc`) goes in as the
+encryption context, so the wrapped data key only unwraps under that same header.
+Change any of it in a stored envelope and the read fails at the KMS, before the
+data is touched. The `aad` in the seam is how each wrapper binds it: AES-GCM
+associated data, or the OAEP label for RSA.
 
 The envelope's three header fields borrow their names from JWE (JSON Web
 Encryption): `alg` for how the data key is wrapped, `kid` for which key unwraps

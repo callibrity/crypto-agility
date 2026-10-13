@@ -137,9 +137,10 @@ again first.
 ```
 
 Look at `rewrap` in `Envelope.java`, then `reEncrypt` in `LocalKms.java`.
-The application hands the KMS a wrapped data key and the id of the new key; the
-KMS unwraps it and wraps it again inside itself, so the plaintext data key never
-reaches the application. AWS calls this operation ReEncrypt. The ciphertext is
+The application hands the KMS a wrapped data key, the id of the new key, and the
+envelope's old and new headers as encryption contexts; the KMS unwraps it and
+wraps it again inside itself, bound to the new header, so the plaintext data key
+never reaches the application. AWS calls this operation ReEncrypt. The ciphertext is
 carried over as it is. Compare the `ciphertext` row of `show 1` before and
 after to check.
 
@@ -262,9 +263,9 @@ loop, which is why `use` offers ML-KEM-512, 768 and 1024 and HQC-128, 192 and
 ## 6. Read the hybrid, and the parts that were never at risk
 
 Before the hybrid, try `AES-256-GCMKW` and read `wrapper/AesGcmWrapper.java`.
-Here an AES-256 key wraps the AES-256 data key with AES-GCM. That is what envelope encryption with
-a cloud KMS usually does: the wrapping key stays inside the KMS, and only the
-32-byte data key goes in and out. It is already quantum-safe, because a quantum
+Here an AES-256 key wraps the AES-256 data key with AES-GCM. That is what
+envelope encryption with a cloud KMS usually does: the wrapping key stays inside
+the KMS, and only the 32-byte data key goes in and out. It is already quantum-safe, because a quantum
 computer only halves the strength of AES. The catch is that it is symmetric:
 whoever can wrap can unwrap, so it only works where writer and reader share the
 key. Public-key wrapping is what lets strangers send each other keys, and it is
