@@ -377,6 +377,15 @@ class ShellTest {
     }
 
     @Test
+    void a_record_can_be_named_by_its_number() throws IOException {
+      shell.execute("write customer record #1");
+      shell.execute("write customer record #2");
+
+      assertEquals(
+          List.of("record-0002"), StoreCommands.select(ws, "2").stream().map(Stored::id).toList());
+    }
+
+    @Test
     void a_record_with_an_unknown_data_cipher_is_listed_as_unknown_in_the_inventory()
         throws IOException {
       shell.execute("write customer record #1");
